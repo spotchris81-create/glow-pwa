@@ -8,27 +8,27 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey);
 export type Cliente = {
   id: string;
   nombre: string;
-  email: string;
   telefono: string | null;
+  citas_asistidas: number;
+  citas_perdidas: number;
   created_at: string;
 };
 
 export type Servicio = {
   id: string;
   nombre: string;
-  descripcion: string | null;
-  duracion_min: number;
+  categoria: string;
   precio: number;
+  duracion_minutos: number;
   activo: boolean;
+  created_at: string;
 };
 
 export type Cita = {
   id: string;
   cliente_id: string;
   servicio_id: string;
-  fecha: string;
-  hora_inicio: string;
-  hora_fin: string;
+  fecha_hora: string;
   estado: "pendiente" | "confirmada" | "cancelada" | "completada";
   notas: string | null;
   created_at: string;
