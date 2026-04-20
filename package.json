@@ -2,12 +2,12 @@
   "name": "glow",
   "version": "0.1.0",
   "private": true,
-  "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
+ "scripts": {
+  "dev": "next dev --webpack",
+  "build": "next build --webpack",
+  "start": "next start",
+  "lint": "eslint"
+},
   "dependencies": {
     "@ducanh2912/next-pwa": "^10.2.9",
     "@supabase/ssr": "^0.10.2",
