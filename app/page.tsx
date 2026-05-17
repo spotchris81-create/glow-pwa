@@ -43,7 +43,6 @@ function gerarHoras(): string[] {
 }
 const TODAS_HORAS = gerarHoras();
 
-// Devuelve los slots de 30 min que ocupa una cita (fecha_hora + duracion)
 function slotsOcupados(citaISO: string, duracao: number): string[] {
   const slots: string[] = [];
   const base = new Date(citaISO);
@@ -55,7 +54,6 @@ function slotsOcupados(citaISO: string, duracao: number): string[] {
   return slots;
 }
 
-// Horas bloqueadas por el pasado (si fecha = hoy)
 function horasPasadas(): string[] {
   const now    = new Date();
   const hAtual = now.getHours();
@@ -66,14 +64,9 @@ function horasPasadas(): string[] {
   });
 }
 
-// Horas que quedan bloqueadas porque el servicio seleccionado no cabe
-// (el slot + los siguientes slots necesarios chocan con un ocupado)
-function horasBloqueadasPorDuracao(
-  ocupadas: string[],
-  duracao: number
-): string[] {
-  const slots  = Math.ceil(duracao / 30);
-  const bloq   = new Set<string>();
+function horasBloqueadasPorDuracao(ocupadas: string[], duracao: number): string[] {
+  const slots = Math.ceil(duracao / 30);
+  const bloq  = new Set<string>();
   TODAS_HORAS.forEach(hora => {
     const [hh, mm] = hora.split(":").map(Number);
     const base     = new Date(2000, 0, 1, hh, mm);
@@ -86,26 +79,16 @@ function horasBloqueadasPorDuracao(
   return Array.from(bloq);
 }
 
-// ─── IMAGENS POR PALAVRA-CHAVE NO NOME DO SERVIÇO ────────
+// ─── IMAGENS POR PALAVRA-CHAVE (arquivos locais) ─────────
 const KW_IMGS: { keys: string[]; url: string }[] = [
-  { keys: ["hidrofacial","hydrofacial","hydro"],       url: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=600&q=80" },
-  { keys: ["limpeza","limpeza facial","purif"],         url: "https://images.unsplash.com/photo-1616394584738-fc6e612e71b9?w=600&q=80" },
-  { keys: ["peeling","esfoliação","esfoliacion"],      url: "https://images.unsplash.com/photo-1512290923902-8a9f81dc236c?w=600&q=80" },
-  { keys: ["botox","botulínica","bótox"],               url: "https://images.unsplash.com/photo-1607008829749-c0f284a49fc4?w=600&q=80" },
-  { keys: ["preenchimento","filler","ácido hialur"],   url: "https://images.unsplash.com/photo-1621798189823-b6c82abde80e?w=600&q=80" },
-  { keys: ["laser","ipl","fototerapia"],               url: "https://images.unsplash.com/photo-1612349317150-e413f6a5b16d?w=600&q=80" },
-  { keys: ["radiofrequência","radiofrequencia","rf"],  url: "https://images.unsplash.com/photo-1559757175-5700dde675bc?w=600&q=80" },
-  { keys: ["massagem","massage","relaxante"],          url: "https://images.unsplash.com/photo-1600334089648-b0d9d3028eb2?w=600&q=80" },
-  { keys: ["drenagem","linfática","linfatica"],        url: "https://images.unsplash.com/photo-1544161515-4ab6ce6db874?w=600&q=80" },
-  { keys: ["celulite","anticelul","ultrassom","cavit"],url: "https://images.unsplash.com/photo-1571019614242-c5c5dee9f50b?w=600&q=80" },
-  { keys: ["sobrancelha","ceja","design de sobracel"], url: "https://images.unsplash.com/photo-1588776814546-1ffcf47267a5?w=600&q=80" },
-  { keys: ["cílios","cilio","pestana","extensão"],     url: "https://images.unsplash.com/photo-1583001931096-959e9a1a6223?w=600&q=80" },
-  { keys: ["capilar","cabelo","queratina","couro"],    url: "https://images.unsplash.com/photo-1522337360788-8b13dee7a37e?w=600&q=80" },
-  { keys: ["manicure","mão","unhas","nail"],           url: "https://images.unsplash.com/photo-1604654894610-df63bc536371?w=600&q=80" },
-  { keys: ["bronz","auto-bronz","spray tan"],          url: "https://images.unsplash.com/photo-1520316587275-5e4f06f355e3?w=600&q=80" },
-  { keys: ["corpo","corporal","wrap","envolvimento"],  url: "https://images.unsplash.com/photo-1596178065887-1198b6148b2b?w=600&q=80" },
+  { keys: ["skin", "booster", "hidratação", "hidratacao"],  url: "/images/skin-boosters.jpg" },
+  { keys: ["capilar", "cabelo", "dermapen"],                url: "/images/capilar.jpg"        },
+  { keys: ["limpeza", "pele"],                              url: "/images/limpeza.jpg"        },
+  { keys: ["glow", "lips", "lábios", "labios"],             url: "/images/glow-lips.jpg"      },
+  { keys: ["acne", "borbulhas"],                            url: "/images/acne.jpg"           },
+  { keys: ["led", "terapia", "rejuvenescimento"],           url: "/images/led.jpg"            },
 ];
-const IMG_DEFAULT = "https://images.unsplash.com/photo-1487412947147-5cebf100ffc2?w=600&q=80";
+const IMG_DEFAULT = "/images/skin-boosters.jpg";
 
 function getImagem(nome: string): string {
   const n = nome.toLowerCase();
@@ -115,39 +98,28 @@ function getImagem(nome: string): string {
   return IMG_DEFAULT;
 }
 
-// ─── COPYWRITING PREMIUM ─────────────────────────────────
-function getDescricao(nome: string, categoria?: string): string {
+// ─── DESCRIÇÕES EXATAS POR SERVIÇO ───────────────────────
+function getDescricao(nome: string): string {
   const n = nome.toLowerCase();
-  if (n.includes("hidrofacial") || n.includes("hydro"))
-    return "Desperte a luminosidade adormecida com este tratamento de vanguarda. Hidratação profunda, remoção de impurezas e renovação celular numa só experiência transformadora.";
-  if (n.includes("limpeza") || n.includes("purif"))
-    return "Uma purificação ritualística que liberta a pele de toxinas e impurezas, revelando um rosto visivelmente mais radiante, suave e cheio de vida.";
-  if (n.includes("peeling") || n.includes("esfoliação"))
-    return "Renove a sua pele camada a camada. Um tratamento de renovação celular intensiva que ilumina, suaviza e revela a sua versão mais luminosa.";
-  if (n.includes("botox") || n.includes("botulínica"))
-    return "Redescubra a suavidade de um rosto descansado e jovial. Uma técnica de precisão que atenua marcas de expressão com resultados naturais e elegantes.";
-  if (n.includes("preench") || n.includes("filler"))
-    return "Restaure o volume e a definição com precisão artística. Um tratamento que harmoniza, rejuvenesce e realça os traços únicos da sua beleza.";
-  if (n.includes("laser"))
-    return "Tecnologia laser de última geração para uma pele impecável. Elimine imperfeições, manchas e textura irregular — resultados visíveis desde a primeira sessão.";
-  if (n.includes("radiofrequên") || n.includes("radiofrequenc") || n.includes(" rf"))
-    return "Estimule o colagénio da sua pele com energia de radiofrequência. Um tratamento de lifting não invasivo que firma, tonifica e rejuvenesce com eficácia comprovada.";
-  if (n.includes("massagem") || n.includes("massage") || n.includes("relaxante"))
-    return "Deixe-se envolver por mãos experientes que dissolverão toda a tensão acumulada. Uma jornada sensorial de relaxamento profundo que reconecta corpo e mente.";
-  if (n.includes("drenagem") || n.includes("linfátic"))
-    return "Um toque suave e rítmico que ativa a circulação, elimina toxinas e proporciona uma leveza indescritível a cada centímetro do seu corpo.";
-  if (n.includes("celulite") || n.includes("cavit") || n.includes("ultrassom"))
-    return "Combata a celulite com uma abordagem terapêutica de alta eficácia. Pele mais lisa, mais firme e mais luminosa, sessão após sessão.";
-  if (n.includes("sobrancelh") || n.includes("ceja"))
-    return "O olhar que sempre sonhou, desenhado com precisão milimétrica. Um design personalizado que emoldura e realça a sua expressão natural.";
-  if (n.includes("cílio") || n.includes("pestana") || n.includes("extensão"))
-    return "Olhos irresistíveis que dispensam maquilhagem. Extensões aplicadas fio a fio com técnica profissional para um resultado natural e duradouro.";
-  if (n.includes("capilar") || n.includes("cabelo") || n.includes("queratina"))
-    return "Um ritual de cuidado profundo para o seu couro cabeludo e cabelo. Nutre, fortalece e devolve o brilho e a vitalidade que merece.";
-  const cat = (categoria ?? "").toLowerCase();
-  if (cat.includes("facial"))   return "Um tratamento facial personalizado que respeita a unicidade da sua pele, proporcionando hidratação, luminosidade e bem-estar incomparáveis.";
-  if (cat.includes("corporal")) return "Entregue o seu corpo a um tratamento de cuidado profundo que revitaliza, tonifica e envolve os sentidos numa experiência de luxo puro.";
-  if (cat.includes("massagem")) return "Uma experiência de relaxamento total, onde o toque terapêutico e os aromas envolventes criam um oásis de tranquilidade e bem-estar.";
+
+  if (["skin","booster","hidratação","hidratacao"].some(k => n.includes(k)))
+    return "A hidratação profunda da pele é essencial para preservar a sua luminosidade, elasticidade e aparência saudável. Os tratamentos com Skin Boosters atuam nas camadas profundas da pele, melhorando a hidratação e a firmeza. Este tratamento é especialmente indicado para: Linhas finas e rugas superficiais; Pele desidratada ou opaca; Perda de elasticidade. Com resultados progressivos e naturais, os Skin Boosters devolvem à pele um aspeto mais fresco e revitalizado.";
+
+  if (["capilar","cabelo","dermapen"].some(k => n.includes(k)))
+    return "Recupere a vitalidade, densidade e qualidade do seu cabelo com tratamentos capilares avançados. Utilizamos técnicas como PRP, Microagulhamento, Exossomas e Polinucleótidos para estimular o crescimento, fortalecer a raiz e melhorar a oxigenação celular do couro cabeludo. Indicado para afinamento capilar, queda em fase inicial e perda de densidade.";
+
+  if (["limpeza","pele"].some(k => n.includes(k)))
+    return "A limpeza de pele é um tratamento essencial para manter a pele saudável, equilibrada e luminosa. Remove impurezas, células mortas e pontos negros. O tratamento inclui higienização profunda, esfoliação suave, extração cuidadosa e hidratação. Promove uma pele mais limpa, previne imperfeições e melhora a textura natural.";
+
+  if (["glow","lips","lábios","labios"].some(k => n.includes(k)))
+    return "Lábios hidratados, luminosos e naturalmente irresistíveis. O tratamento Glow Lips realça a beleza natural dos teus lábios, proporcionando hidratação profunda, brilho saudável e um efeito suave e volumoso. Com ingredientes nutritivos e acabamento glow, os teus lábios ficam revitalizados e macios.";
+
+  if (["acne","borbulhas"].some(k => n.includes(k)))
+    return "Cuida da tua pele com um tratamento especializado para reduzir a acne, controlar a oleosidade e melhorar a textura da pele. Ajuda a combater borbulhas, marcas e inflamações. Reduz a vermelhidão, previne novas imperfeições e promove uma pele mais uniforme e luminosa.";
+
+  if (["led","terapia","rejuvenescimento"].some(k => n.includes(k)))
+    return "Revitaliza a tua pele com a tecnologia LED Terapia, um tratamento não invasivo que estimula a regeneração celular. A luz LED atua em profundidade para estimular a produção de colagénio, reduzir linhas finas e melhorar a firmeza e elasticidade, proporcionando um aspeto mais jovem e saudável sem dor.";
+
   return "Uma experiência de bem-estar criada exclusivamente para si — porque a sua beleza merece um cuidado verdadeiramente especial.";
 }
 
@@ -162,18 +134,39 @@ const TABS_CAT = [
 ];
 
 const FAQ = [
-  { q: "Como posso marcar uma consulta?", a: "Pode marcar diretamente neste site, pelo WhatsApp ou por telefone. Após submeter o formulário, a nossa equipa entrará em contacto para confirmar a disponibilidade." },
-  { q: "Qual é a política de cancelamento?", a: "Pedimos que nos avise com pelo menos 24 horas de antecedência em caso de cancelamento ou remarcação, para podermos disponibilizar o horário a outros clientes." },
+  { q: "Como posso marcar uma consulta?",                   a: "Pode marcar diretamente neste site, pelo WhatsApp ou por telefone. Após submeter o formulário, a nossa equipa entrará em contacto para confirmar a disponibilidade." },
+  { q: "Qual é a política de cancelamento?",               a: "Pedimos que nos avise com pelo menos 24 horas de antecedência em caso de cancelamento ou remarcação, para podermos disponibilizar o horário a outros clientes." },
   { q: "Os tratamentos são adequados para todos os tipos de pele?", a: "Sim! Adaptamos todos os tratamentos ao seu tipo de pele específico. Na primeira consulta realizamos uma análise completa para personalizar a sua experiência." },
-  { q: "Quanto tempo dura cada tratamento?", a: "A duração varia consoante o serviço, entre 45 minutos e 2 horas. Pode consultar a duração de cada tratamento no catálogo de serviços." },
+  { q: "Quanto tempo dura cada tratamento?",               a: "A duração varia consoante o serviço, entre 45 minutos e 2 horas. Pode consultar a duração de cada tratamento no catálogo de serviços." },
 ];
 
 // ─── ESTILOS BASE ────────────────────────────────────────
 const S = {
-  btnRose: { background: C.rose, color: C.white, border: "none", borderRadius: "30px", fontWeight: 600, cursor: "pointer", fontFamily: FONT_BODY, letterSpacing: "0.03em" } as React.CSSProperties,
-  btnGhost: { background: "transparent", color: C.roseDark, border: `1.5px solid ${C.rose}`, borderRadius: "30px", fontWeight: 600, cursor: "pointer", fontFamily: FONT_BODY, textDecoration: "none", display: "inline-flex", alignItems: "center", justifyContent: "center" } as React.CSSProperties,
-  lbl: { color: C.text2, fontSize: "0.72rem", letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: "5px", display: "block", marginTop: "0.8rem", fontFamily: FONT_BODY } as React.CSSProperties,
-  inp: { width: "100%", background: C.bgAlt, border: `1.5px solid ${C.roseMid}`, borderRadius: "12px", color: C.text, fontSize: "0.9rem", padding: "0.7rem 0.9rem", outline: "none", boxSizing: "border-box" as const, fontFamily: FONT_BODY, colorScheme: "light" as const, marginBottom: "0.1rem" } as React.CSSProperties,
+  btnRose: {
+    background: C.rose, color: C.white, border: "none",
+    borderRadius: "30px", fontWeight: 600, cursor: "pointer",
+    fontFamily: FONT_BODY, letterSpacing: "0.03em",
+  } as React.CSSProperties,
+  btnGhost: {
+    background: "transparent", color: C.roseDark,
+    border: `1.5px solid ${C.rose}`, borderRadius: "30px",
+    fontWeight: 600, cursor: "pointer", fontFamily: FONT_BODY,
+    textDecoration: "none", display: "inline-flex",
+    alignItems: "center", justifyContent: "center",
+  } as React.CSSProperties,
+  lbl: {
+    color: C.text2, fontSize: "0.72rem", letterSpacing: "0.1em",
+    textTransform: "uppercase" as const, marginBottom: "5px",
+    display: "block", marginTop: "0.8rem", fontFamily: FONT_BODY,
+  } as React.CSSProperties,
+  inp: {
+    width: "100%", background: C.bgAlt,
+    border: `1.5px solid ${C.roseMid}`, borderRadius: "12px",
+    color: C.text, fontSize: "0.9rem", padding: "0.7rem 0.9rem",
+    outline: "none", boxSizing: "border-box" as const,
+    fontFamily: FONT_BODY, colorScheme: "light" as const,
+    marginBottom: "0.1rem",
+  } as React.CSSProperties,
 };
 
 // ─── COMPONENTE ───────────────────────────────────────────
@@ -209,14 +202,23 @@ export default function ClientePage() {
     resize();
     window.addEventListener("resize", resize);
     for (let i = 0; i < 55; i++) {
-      particles.push({ x: Math.random() * (canvas.width || 800), y: Math.random() * (canvas.height || 600), r: Math.random() * 2.5 + 0.5, dx: (Math.random() - 0.5) * 0.3, dy: -Math.random() * 0.4 - 0.1, alpha: Math.random() * 0.5 + 0.1 });
+      particles.push({
+        x:     Math.random() * (canvas.width  || 800),
+        y:     Math.random() * (canvas.height || 600),
+        r:     Math.random() * 2.5 + 0.5,
+        dx:    (Math.random() - 0.5) * 0.3,
+        dy:    -Math.random() * 0.4 - 0.1,
+        alpha: Math.random() * 0.5 + 0.1,
+      });
     }
     function draw() {
       if (!ctx || !canvas) return;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       particles.forEach(p => {
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(236,168,169,${p.alpha})`; ctx.fill();
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(236,168,169,${p.alpha})`;
+        ctx.fill();
         p.x += p.dx; p.y += p.dy;
         if (p.y < -5) { p.y = canvas.height + 5; p.x = Math.random() * canvas.width; }
         if (p.x < -5 || p.x > canvas.width + 5) p.dx *= -1;
@@ -229,11 +231,13 @@ export default function ClientePage() {
 
   // Servicios activos
   useEffect(() => {
-    supabase.from("servicios").select("id, nombre, precio, duracion_minutos, categoria").eq("activo", true)
+    supabase.from("servicios")
+      .select("id, nombre, precio, duracion_minutos, categoria")
+      .eq("activo", true)
       .then(({ data }) => { if (data) setServicios(data); });
   }, []);
 
-  // Citas del día seleccionado (raw para calcular bloqueos)
+  // Citas del día para bloqueo
   useEffect(() => {
     if (!form.data) return;
     const ini = new Date(`${form.data}T00:00:00`).toISOString();
@@ -243,28 +247,21 @@ export default function ClientePage() {
       .then(({ data }) => { if (data) setCitasRaw(data as CitaOcupada[]); });
   }, [form.data]);
 
-  // Calcular horas bloqueadas
+  // Cálculo de bloqueos
   const servicoSel = servicios.find(s => s.id === form.servico_id);
   const duracao    = servicoSel?.duracion_minutos ?? 30;
-
-  // Slots ocupados (expandidos por duración de cada cita)
-  // Aquí necesitamos duración de cada cita existente — usamos 60 min como default
-  // conservador si no tenemos el dato. En producción ideal habría un join.
-  const slotsBase = citasRaw.flatMap(c => slotsOcupados(c.fecha_hora, 60));
-
-  // Horas bloqueadas por duración del servicio seleccionado
+  const slotsBase  = citasRaw.flatMap(c => slotsOcupados(c.fecha_hora, 60));
   const bloqDuracao = horasBloqueadasPorDuracao(slotsBase, duracao);
-
-  // Horas del pasado si es hoy
   const bloqPasado  = form.data === hojeISO() ? horasPasadas() : [];
-
   const todasBloq   = new Set([...slotsBase, ...bloqDuracao, ...bloqPasado]);
 
   function campo(f: keyof FormState, v: string) {
-    setForm(p => ({ ...p, [f]: v }));
+    if (f === "servico_id" || f === "data") {
+      setForm(p => ({ ...p, [f]: v, hora: "" }));
+    } else {
+      setForm(p => ({ ...p, [f]: v }));
+    }
     setErro(null);
-    // Si cambia servicio o fecha, limpia hora
-    if (f === "servico_id" || f === "data") setForm(p => ({ ...p, [f]: v, hora: "" }));
   }
 
   function abrirModal(servico_id?: string) {
@@ -283,12 +280,14 @@ export default function ClientePage() {
     if (ex) {
       cliente_id = ex.id;
     } else {
-      const { data: nv, error: e } = await supabase.from("clientes").insert({ nombre: nome, telefono: telefone }).select("id").single();
+      const { data: nv, error: e } = await supabase.from("clientes")
+        .insert({ nombre: nome, telefono: telefone }).select("id").single();
       if (e || !nv) { setErro("Erro ao registar cliente."); setLoading(false); return; }
       cliente_id = nv.id;
     }
     const fecha_hora = new Date(`${data}T${hora}:00`).toISOString();
-    const { error: ce } = await supabase.from("citas").insert({ cliente_id, servicio_id: servico_id, fecha_hora, estado: "pendiente" });
+    const { error: ce } = await supabase.from("citas")
+      .insert({ cliente_id, servicio_id: servico_id, fecha_hora, estado: "pendiente" });
     if (ce) setErro("Erro ao guardar marcação.");
     else { setSuccess(true); setForm({ nome: "", telefone: "", servico_id: "", data: hojeISO(), hora: "" }); }
     setLoading(false);
@@ -347,10 +346,8 @@ export default function ClientePage() {
         </div>
         {menuOpen && (
           <div className="mobile-menu" style={{ background: C.white, borderTop: `1px solid ${C.roseMid}`, padding: "1rem 1.5rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
-            {["#servicos","#faq","#contacto"].map((href, i) => (
-              <a key={href} href={href} onClick={() => setMenuOpen(false)} style={{ color: C.text, fontSize: "0.95rem", textDecoration: "none", fontWeight: 500, padding: "0.4rem 0", borderBottom: `1px solid ${C.roseMid}` }}>
-                {["Serviços","FAQ","Contacto"][i]}
-              </a>
+            {[["#servicos","Serviços"],["#faq","FAQ"],["#contacto","Contacto"]].map(([href,label]) => (
+              <a key={href} href={href} onClick={() => setMenuOpen(false)} style={{ color: C.text, fontSize: "0.95rem", textDecoration: "none", fontWeight: 500, padding: "0.4rem 0", borderBottom: `1px solid ${C.roseMid}` }}>{label}</a>
             ))}
             <a href="/admin" style={{ color: C.text2, fontSize: "0.88rem", textDecoration: "none", fontWeight: 500, padding: "0.4rem 0", borderBottom: `1px solid ${C.roseMid}`, display: "flex", alignItems: "center", gap: "6px" }}>🔒 Acesso Equipa</a>
             <button onClick={() => abrirModal()} style={{ ...S.btnRose, padding: "0.75rem", fontSize: "0.95rem", marginTop: "0.25rem" }}>Marcar Agora</button>
@@ -363,7 +360,9 @@ export default function ClientePage() {
         <div style={{ position: "absolute", inset: 0, backgroundImage: `url("https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1400&q=55")`, backgroundSize: "cover", backgroundPosition: "center", opacity: 0.07 }} />
         <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
         <div style={{ position: "relative", zIndex: 2, maxWidth: "680px", width: "100%", opacity: heroVisible ? 1 : 0, transition: "opacity 0.9s ease, transform 0.9s ease", transform: heroVisible ? "translateY(0)" : "translateY(24px)" }}>
-          <div style={{ display: "inline-block", background: "rgba(255,255,255,0.72)", backdropFilter: "blur(8px)", color: C.roseDeep, fontSize: "0.7rem", letterSpacing: "0.28em", textTransform: "uppercase", padding: "7px 22px", borderRadius: "999px", marginBottom: "1.75rem", border: `1px solid ${C.roseMid}`, fontWeight: 600 }}>Centro de Estética · Lisboa</div>
+          <div style={{ display: "inline-block", background: "rgba(255,255,255,0.72)", backdropFilter: "blur(8px)", color: C.roseDeep, fontSize: "0.7rem", letterSpacing: "0.28em", textTransform: "uppercase", padding: "7px 22px", borderRadius: "999px", marginBottom: "1.75rem", border: `1px solid ${C.roseMid}`, fontWeight: 600 }}>
+            Centro de Estética · Lisboa
+          </div>
           <h1 style={{ fontFamily: FONT_TITLE, fontSize: "clamp(2.2rem, 6.5vw, 5rem)", fontWeight: 700, color: C.text, lineHeight: 1.08, letterSpacing: "-0.02em", marginBottom: "1.25rem" }}>
             A arte de <em style={{ color: C.rose, fontStyle: "italic" }}>cuidar</em><br />a sua beleza
           </h1>
@@ -405,19 +404,29 @@ export default function ClientePage() {
             <p style={{ fontSize: "0.88rem" }}>Estamos a preparar tratamentos incríveis para esta categoria.</p>
           </div>
         ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "1.75rem" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: "1.75rem" }}>
             {serviciosFiltrados.map(sv => (
               <div key={sv.id} className="svc-card" style={{ background: C.white, borderRadius: "20px", overflow: "hidden", boxShadow: "0 4px 24px rgba(236,168,169,0.13)", border: `1px solid ${C.roseMid}` }}>
-                <div style={{ height: "190px", overflow: "hidden", position: "relative" }}>
-                  <img src={getImagem(sv.nombre)} alt={sv.nombre} loading="lazy" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <div style={{ height: "210px", overflow: "hidden", position: "relative", background: C.roseLight }}>
+                  <img
+                    src={getImagem(sv.nombre)}
+                    alt={sv.nombre}
+                    loading="lazy"
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    onError={e => { (e.currentTarget as HTMLImageElement).src = IMG_DEFAULT; }}
+                  />
                   <div style={{ position: "absolute", top: "12px", right: "12px", background: "rgba(255,255,255,0.88)", backdropFilter: "blur(6px)", borderRadius: "999px", padding: "4px 12px", fontSize: "0.7rem", color: C.roseDeep, fontWeight: 600 }}>
                     {sv.duracion_minutos} min
                   </div>
                 </div>
                 <div style={{ padding: "1.4rem 1.5rem 1.6rem" }}>
-                  <h3 style={{ fontFamily: FONT_TITLE, fontSize: "1.05rem", fontWeight: 700, color: C.text, marginBottom: "0.5rem" }}>{sv.nombre}</h3>
-                  <p style={{ color: C.text2, fontSize: "0.82rem", lineHeight: 1.68, marginBottom: "1.25rem" }}>{getDescricao(sv.nombre, sv.categoria)}</p>
-                  <button onClick={() => abrirModal(sv.id)} style={{ ...S.btnRose, width: "100%", padding: "0.72rem", fontSize: "0.85rem" }}>Reservar Experiência</button>
+                  <h3 style={{ fontFamily: FONT_TITLE, fontSize: "1.05rem", fontWeight: 700, color: C.text, marginBottom: "0.6rem" }}>{sv.nombre}</h3>
+                  <p style={{ color: C.text2, fontSize: "0.82rem", lineHeight: 1.7, marginBottom: "1.25rem" }}>
+                    {getDescricao(sv.nombre)}
+                  </p>
+                  <button onClick={() => abrirModal(sv.id)} style={{ ...S.btnRose, width: "100%", padding: "0.72rem", fontSize: "0.85rem" }}>
+                    Reservar Experiência
+                  </button>
                 </div>
               </div>
             ))}
@@ -466,16 +475,22 @@ export default function ClientePage() {
                   <span style={{ fontSize: "1.2rem", marginTop: "1px" }}>{icon}</span>
                   <div>
                     <div style={{ color: C.text3, fontSize: "0.67rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "4px", fontWeight: 600 }}>{label}</div>
-                    {href ? <a href={href} target="_blank" rel="noreferrer" style={{ color: C.roseDeep, fontSize: "0.9rem", textDecoration: "none", fontWeight: 500 }}>{value}</a>
-                          : <div style={{ color: C.text, fontSize: "0.9rem", whiteSpace: "pre-line" }}>{value}</div>}
+                    {href
+                      ? <a href={href} target="_blank" rel="noreferrer" style={{ color: C.roseDeep, fontSize: "0.9rem", textDecoration: "none", fontWeight: 500 }}>{value}</a>
+                      : <div style={{ color: C.text, fontSize: "0.9rem", whiteSpace: "pre-line" }}>{value}</div>
+                    }
                   </div>
                 </div>
               ))}
             </div>
             <div style={{ borderRadius: "20px", overflow: "hidden", border: `1px solid ${C.roseMid}`, boxShadow: "0 4px 24px rgba(236,168,169,0.14)", minHeight: "320px" }}>
-              <iframe title="Localização Glow"
+              <iframe
+                title="Localização Glow"
                 src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3113.0!2d-9.1435!3d38.7195!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMzjCsDQzJzEwLjIiTiA5wrAwOCczNi42Ilc!5e0!3m2!1spt!2spt!4v1"
-                width="100%" height="100%" style={{ border: 0, display: "block", minHeight: "320px" }} allowFullScreen loading="lazy" />
+                width="100%" height="100%"
+                style={{ border: 0, display: "block", minHeight: "320px" }}
+                allowFullScreen loading="lazy"
+              />
             </div>
           </div>
         </div>
@@ -490,11 +505,14 @@ export default function ClientePage() {
           <a href={`https://wa.me/${WA_NUM}`} target="_blank" rel="noreferrer" style={{ color: C.green, fontSize: "0.8rem", textDecoration: "none", fontWeight: 500 }}>WhatsApp</a>
         </div>
         <p style={{ color: C.text3, fontSize: "0.7rem", marginTop: "1rem" }}>© {new Date().getFullYear()} Glow Esthetic. Todos os direitos reservados.</p>
-        <a href="/admin" style={{ display: "inline-flex", alignItems: "center", gap: "5px", marginTop: "1.25rem", color: C.text2, fontSize: "0.78rem", textDecoration: "none", fontWeight: 500, background: "rgba(255,255,255,0.6)", border: `1px solid ${C.roseMid}`, borderRadius: "20px", padding: "5px 14px", letterSpacing: "0.03em" }}>🔒 Acesso Equipa</a>
+        <a href="/admin" style={{ display: "inline-flex", alignItems: "center", gap: "5px", marginTop: "1.25rem", color: C.text2, fontSize: "0.78rem", textDecoration: "none", fontWeight: 500, background: "rgba(255,255,255,0.6)", border: `1px solid ${C.roseMid}`, borderRadius: "20px", padding: "5px 14px", letterSpacing: "0.03em" }}>
+          🔒 Acesso Equipa
+        </a>
       </footer>
 
-      {/* ── WHATSAPP ── */}
-      <a href={`https://wa.me/${WA_NUM}?text=Olá!%20Gostaria%20de%20marcar%20uma%20consulta.`} target="_blank" rel="noreferrer" className="wa-btn"
+      {/* ── WHATSAPP FLOTANTE ── */}
+      <a href={`https://wa.me/${WA_NUM}?text=Olá!%20Gostaria%20de%20marcar%20uma%20consulta.`}
+        target="_blank" rel="noreferrer" className="wa-btn"
         style={{ position: "fixed", bottom: "1.75rem", right: "1.75rem", zIndex: 300, background: C.wa, borderRadius: "50%", width: "58px", height: "58px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 6px 24px rgba(37,211,102,0.45)`, textDecoration: "none", transition: "transform .2s" }}>
         <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
           <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
@@ -503,21 +521,27 @@ export default function ClientePage() {
 
       {/* ── MODAL RESERVA ── */}
       {modal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(51,51,51,0.55)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(51,51,51,0.55)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
           onClick={e => { if (e.target === e.currentTarget) fecharModal(); }}>
           <div style={{ background: C.white, borderRadius: "24px", padding: "2.25rem", width: "100%", maxWidth: "500px", maxHeight: "94vh", overflowY: "auto", position: "relative", boxShadow: "0 24px 70px rgba(51,51,51,0.2)" }}>
             <button onClick={fecharModal} style={{ position: "absolute", top: "1.25rem", right: "1.25rem", background: C.roseLight, border: "none", color: C.roseDark, fontSize: "1rem", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>✕</button>
+
             {success ? (
               <div style={{ textAlign: "center", padding: "2rem 0" }}>
                 <div style={{ width: "64px", height: "64px", background: C.roseLight, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem", fontSize: "1.6rem", color: C.rose }}>✦</div>
                 <h2 style={{ fontFamily: FONT_TITLE, color: C.text, margin: "0 0 0.6rem", fontWeight: 700, fontSize: "1.5rem" }}>Marcação Enviada!</h2>
-                <p style={{ color: C.text2, fontSize: "0.9rem", lineHeight: 1.65, maxWidth: "320px", margin: "0 auto 1.75rem" }}>A nossa equipa confirmará a disponibilidade e detalhes em breve.</p>
+                <p style={{ color: C.text2, fontSize: "0.9rem", lineHeight: 1.65, maxWidth: "320px", margin: "0 auto 1.75rem" }}>
+                  A nossa equipa confirmará a disponibilidade e detalhes em breve.
+                </p>
                 <button style={{ ...S.btnRose, padding: "0.8rem 2rem" }} onClick={fecharModal}>Fechar</button>
               </div>
             ) : (
               <>
                 <h2 style={{ fontFamily: FONT_TITLE, color: C.text, fontWeight: 700, fontSize: "1.4rem", margin: "0 0 0.4rem" }}>Reservar Experiência</h2>
-                <p style={{ color: C.text2, fontSize: "0.82rem", marginBottom: "1.5rem", lineHeight: 1.6 }}>A nossa equipa confirmará a disponibilidade e os detalhes.</p>
+                <p style={{ color: C.text2, fontSize: "0.82rem", marginBottom: "1.5rem", lineHeight: 1.6 }}>
+                  A nossa equipa confirmará a disponibilidade e os detalhes.
+                </p>
 
                 <label style={S.lbl}>Nome</label>
                 <input style={S.inp} placeholder="O seu nome completo" value={form.nome} onChange={e => campo("nome", e.target.value)} />
@@ -528,7 +552,9 @@ export default function ClientePage() {
                 <label style={S.lbl}>Tratamento</label>
                 <select style={S.inp} value={form.servico_id} onChange={e => campo("servico_id", e.target.value)}>
                   <option value="">Escolha um tratamento…</option>
-                  {servicios.map(sv => <option key={sv.id} value={sv.id}>{sv.nombre} ({sv.duracion_minutos} min)</option>)}
+                  {servicios.map(sv => (
+                    <option key={sv.id} value={sv.id}>{sv.nombre} ({sv.duracion_minutos} min)</option>
+                  ))}
                 </select>
 
                 {servicoSel && (
@@ -557,7 +583,10 @@ export default function ClientePage() {
                 </div>
 
                 {erro && <p style={{ color: "#e05555", fontSize: "0.82rem", marginBottom: "0.75rem" }}>{erro}</p>}
-                <button style={{ ...S.btnRose, width: "100%", padding: "0.95rem", fontSize: "0.95rem", opacity: loading ? 0.65 : 1, boxShadow: `0 6px 20px rgba(236,168,169,0.4)` }} onClick={reservar} disabled={loading}>
+
+                <button
+                  style={{ ...S.btnRose, width: "100%", padding: "0.95rem", fontSize: "0.95rem", opacity: loading ? 0.65 : 1, boxShadow: `0 6px 20px rgba(236,168,169,0.4)` }}
+                  onClick={reservar} disabled={loading}>
                   {loading ? "A enviar…" : "✦ Confirmar Marcação"}
                 </button>
               </>
