@@ -57,8 +57,8 @@ const ESTADO_COLOR: Record<string, string> = {
   cancelada:  C.red,
 };
 
-const HORAS_AGENDA = Array.from({ length: 12 }, (_, i) =>
-  `${String(i + 9).padStart(2, "0")}:00`
+const HORAS_AGENDA = Array.from({ length: 9 }, (_, i) =>
+  `${String(i + 11).padStart(2, "0")}:00`
 );
 
 // ─── HELPERS ─────────────────────────────────────────────
