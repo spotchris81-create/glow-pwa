@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useRef } from "react";
 import { supabase } from "@/lib/supabase";
 
 // ─── PALETA ───────────────────────────────────────────────
@@ -17,552 +17,657 @@ const C = {
   text2:     "#777777",
   text3:     "#aaaaaa",
   green:     "#22c55e",
-  greenBg:   "#f0fdf4",
-  greenBd:   "#bbf7d0",
-  red:       "#e05555",
-  redBg:     "#fff1f1",
-  redBd:     "#fecaca",
-  blue:      "#3b82f6",
-  blueBg:    "#eff6ff",
-  amber:     "#f59e0b",
-  amberBg:   "#fffbeb",
   wa:        "#25D366",
 } as const;
 
 const FONT_TITLE = "'Playfair Display', Georgia, serif";
 const FONT_BODY  = "'Inter', 'Segoe UI', sans-serif";
-const PASSWORD   = "admin2025";
+const WA_NUM     = "351927459295";
+const INSTAGRAM  = "_glowesthetic_";
+const INSTAGRAM_URL = "https://www.instagram.com/_glowesthetic_?utm_source=qr&igsh=MXF3NGtvZTM1a2c3bg==";
 
 // ─── TIPOS ───────────────────────────────────────────────
-type CitaRow  = {
-  id: string; fecha_hora: string; estado: string; notas: string | null;
-  clientes: { id: string; nombre: string; telefono: string | null } | null;
-  servicios: { nombre: string; precio: number } | null;
-};
-type Cliente  = { id: string; nombre: string; telefono: string | null; citas_asistidas: number; citas_perdidas: number };
-type Servicio = { id: string; nombre: string; precio: number; activo: boolean; duracion_minutos: number };
-type Tab      = "resumo" | "calendario" | "crm" | "servicos";
-
-const TABS: { key: Tab; label: string; icon: string }[] = [
-  { key: "resumo",     label: "Resumo",     icon: "📊" },
-  { key: "calendario", label: "Calendário", icon: "📅" },
-  { key: "crm",        label: "CRM",        icon: "👥" },
-  { key: "servicos",   label: "Serviços",   icon: "✨" },
-];
-
-const ESTADO_COLOR: Record<string, string> = {
-  pendiente:  C.amber,
-  confirmada: C.blue,
-  completada: C.green,
-  cancelada:  C.red,
-};
-
-const HORAS_AGENDA = Array.from({ length: 9 }, (_, i) =>
-  `${String(i + 11).padStart(2, "0")}:00`
-);
+type Servicio    = { id: string; nombre: string; precio: number; duracion_minutos: number; categoria?: string };
+type CitaOcupada = { fecha_hora: string };
+type FormState   = { nome: string; telefone: string; servico_id: string; data: string; hora: string };
 
 // ─── HELPERS ─────────────────────────────────────────────
 function hojeISO() { return new Date().toISOString().split("T")[0]; }
 
-function diaBounds(dia: string) {
-  return { ini: new Date(`${dia}T00:00:00`).toISOString(), fim: new Date(`${dia}T23:59:59`).toISOString() };
+function gerarHoras(): string[] {
+  const h: string[] = [];
+  for (let i = 11; i <= 19; i++) {
+    h.push(`${String(i).padStart(2,"0")}:00`);
+    if (i < 19) h.push(`${String(i).padStart(2,"0")}:30`);
+  }
+  return h;
 }
-function semanaBounds() {
-  const fim = new Date(); fim.setHours(23,59,59,999);
-  const ini = new Date(); ini.setDate(ini.getDate() - 6); ini.setHours(0,0,0,0);
-  return { ini: ini.toISOString(), fim: fim.toISOString() };
-}
-function mesBounds() {
-  const now = new Date();
-  const ini = new Date(now.getFullYear(), now.getMonth(), 1, 0,0,0,0);
-  const fim = new Date(now.getFullYear(), now.getMonth()+1, 0, 23,59,59,999);
-  return { ini: ini.toISOString(), fim: fim.toISOString() };
-}
-function horaDeISO(iso: string) {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2,"0")}:00`;
-}
-function horaMinDeISO(iso: string) {
-  const d = new Date(iso);
-  return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;
+const TODAS_HORAS = gerarHoras();
+
+function slotsOcupados(citaISO: string, duracao: number): string[] {
+  const slots: string[] = [];
+  const base = new Date(citaISO);
+  const n    = Math.ceil(duracao / 30);
+  for (let i = 0; i < n; i++) {
+    const t = new Date(base.getTime() + i * 30 * 60000);
+    slots.push(`${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`);
+  }
+  return slots;
 }
 
-// Extrae precio cobrado de notas: "[Preço Cobrado: 45€]"
-function extrairPrecoCobrado(notas: string | null): string | null {
-  if (!notas) return null;
-  const m = notas.match(/\[Preço Cobrado:\s*([\d.]+)€\]/);
-  return m ? m[1] : null;
+function horasPasadas(): string[] {
+  const now    = new Date();
+  const hAtual = now.getHours();
+  const mAtual = now.getMinutes();
+  return TODAS_HORAS.filter(h => {
+    const [hh, mm] = h.split(":").map(Number);
+    return hh < hAtual || (hh === hAtual && mm <= mAtual);
+  });
 }
 
-// ─── ESTILOS ─────────────────────────────────────────────
+function horasBloqueadasPorDuracao(ocupadas: string[], duracao: number): string[] {
+  const slots = Math.ceil(duracao / 30);
+  const bloq  = new Set<string>();
+  TODAS_HORAS.forEach(hora => {
+    const [hh, mm] = hora.split(":").map(Number);
+    const base     = new Date(2000, 0, 1, hh, mm);
+    for (let i = 0; i < slots; i++) {
+      const t  = new Date(base.getTime() + i * 30 * 60000);
+      const ts = `${String(t.getHours()).padStart(2,"0")}:${String(t.getMinutes()).padStart(2,"0")}`;
+      if (ocupadas.includes(ts)) { bloq.add(hora); break; }
+    }
+  });
+  return Array.from(bloq);
+}
+
+// ─── IMAGENS POR PALAVRA-CHAVE ────────────────────────────
+const KW_IMGS: { keys: string[]; url: string }[] = [
+  { keys: ["skin","booster"],                                    url: "/images/skin-boosters.jpg"           },
+  { keys: ["capilar","cabelo","dermapen"],                       url: "/images/capilar.jpg"                 },
+  { keys: ["limpeza","pele"],                                    url: "/images/limpeza.jpg"                 },
+  { keys: ["glow","lips","lábios","labios"],                     url: "/images/glow-lips.jpg"               },
+  { keys: ["acne","borbulhas"],                                  url: "/images/acne.jpg"                    },
+  { keys: ["led","terapia"],                                     url: "/images/led.jpg"                     },
+  { keys: ["depilação","depilacao","laser"],                     url: "/images/laser.jpg"                   },
+  { keys: ["relaxante"],                                         url: "/images/relaxante.jpg"               },
+  { keys: ["drenagem","linfática","linfatica"],                  url: "/images/relaxante.jpg"               },
+  { keys: ["modeladora","redutora"],                             url: "/images/modeladora.jpg"              },
+  { keys: ["tatuagem","tattoo"],                                 url: "/images/remocao-tatuagem.jpg"        },
+  { keys: ["sobrancelh"],                                        url: "/images/remocao-sobrancelha.jpg"     },
+  { keys: ["presso","pressoterapia"],                            url: "/images/pressoterapia.jpg"           },
+  { keys: ["radiofrequênci","radiofrequenci"," rf"],             url: "/images/radiofrequencia.jpg"         },
+  { keys: ["grávid","gravid","gestante"],                        url: "/images/massagem-gravidas.jpg"       },
+  { keys: ["desportiv","desporto","atleta"],                     url: "/images/massagem-desportiva.jpg"     },
+  { keys: ["operatór","operatori","cirurgia"],                   url: "/images/massagem-pos-operatoria.jpg" },
+  { keys: ["hydro","hidro","hidrofacial"],                       url: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=600&q=80" },
+];
+const IMG_DEFAULT = "/images/skin-boosters.jpg";
+
+function getImagem(nome: string): string {
+  const n = nome.toLowerCase();
+  for (const { keys, url } of KW_IMGS) {
+    if (keys.some(k => n.includes(k))) return url;
+  }
+  return IMG_DEFAULT;
+}
+
+// ─── DESCRIÇÕES PREMIUM ───────────────────────────────────
+function getDescricao(nome: string): string {
+  const n = nome.toLowerCase();
+
+  if (n.includes("skin") || n.includes("booster"))
+    return "A hidratação profunda da pele é essencial para preservar a sua luminosidade, elasticidade e aparência saudável. Os tratamentos com Skin Boosters atuam nas camadas profundas da pele, melhorando a hidratação e a firmeza. Com resultados progressivos e naturais, devolvem à pele um aspeto mais fresco e revitalizado.";
+
+  if (n.includes("capilar") || n.includes("cabelo") || n.includes("dermapen"))
+    return "Recupere a vitalidade, densidade e qualidade do seu cabelo com tratamentos capilares avançados. Utilizamos técnicas como PRP, Microagulhamento, Exossomas e Polinucleótidos para estimular o crescimento, fortalecer a raiz e melhorar a oxigenação celular do couro cabeludo.";
+
+  if (n.includes("limpeza") || n.includes("pele"))
+    return "A limpeza de pele é um tratamento essencial para manter a pele saudável, equilibrada e luminosa. Remove impurezas, células mortas e pontos negros. O tratamento inclui higienização profunda, esfoliação suave, extração cuidadosa e hidratação.";
+
+  if (n.includes("glow") || n.includes("lips") || n.includes("lábios") || n.includes("labios"))
+    return "Lábios hidratados, luminosos e naturalmente irresistíveis. O tratamento Glow Lips realça a beleza natural dos teus lábios, proporcionando hidratação profunda, brilho saudável e um efeito suave e volumoso.";
+
+  if (n.includes("acne") || n.includes("borbulhas"))
+    return "Cuida da tua pele com um tratamento especializado para reduzir a acne, controlar a oleosidade e melhorar a textura da pele. Ajuda a combater borbulhas, marcas e inflamações, promovendo uma pele mais uniforme e luminosa.";
+
+  if (n.includes("led") || n.includes("terapia"))
+    return "Revitaliza a tua pele com a tecnologia LED Terapia, um tratamento não invasivo que estimula a regeneração celular. A luz LED atua em profundidade para estimular a produção de colagénio, reduzir linhas finas e melhorar a firmeza.";
+
+  if (n.includes("depilação") || n.includes("depilacao") || n.includes("laser"))
+    return "A depilação a laser é um método de depilação progressiva definitiva que utiliza a luz para destruir o pelo direto na raiz. Fim da foliculite, clareamento da pele e resultados duradouros.";
+
+  if (n.includes("relaxante"))
+    return "Renove as suas energias e cuide do seu bem-estar com a nossa Massagem Relaxante. Um momento perfeito para aliviar o stress, relaxar o corpo e equilibrar a mente.";
+
+  if (n.includes("drenagem") || n.includes("linfática") || n.includes("linfatica"))
+    return "Cuide do seu corpo e sinta-se mais leve. Ajuda a eliminar toxinas, reduzir o inchaço e a retenção de líquidos, contribuindo para a redução da celulite e promovendo bem-estar.";
+
+  if (n.includes("modeladora") || n.includes("redutora"))
+    return "Combina manobras vigorosas e técnicas de drenagem que ativam a circulação, eliminam toxinas e modelam as tuas curvas de forma imediata. Reduz o volume abdominal e combate a celulite.";
+
+  if (n.includes("tatuagem") || n.includes("tattoo"))
+    return "Procedimento estético e biomédico que utiliza tecnologia a laser para fragmentar e eliminar os pigmentos de tinta introduzidos na camada da derme da pele de forma segura.";
+
+  if (n.includes("sobrancelh"))
+    return "Remoção segura e eficaz de pigmentos antigos na zona das sobrancelhas utilizando tecnologia avançada.";
+
+  if (n.includes("presso") || n.includes("pressoterapia"))
+    return "A Pressoterapia é um tratamento estético e terapêutico que utiliza pressão de ar controlada através de botas para estimular a circulação. Ajuda a eliminar toxinas, reduzir o inchaço e a sensação de pernas cansadas.";
+
+  if (n.includes("radiofrequênci") || n.includes("radiofrequenci") || n.includes(" rf"))
+    return "Tratamento estético não invasivo que utiliza ondas de radiofrequência para aquecer as camadas profundas da pele, estimulando a produção de colagénio e elastina. Reduz a flacidez e tonifica.";
+
+  if (n.includes("grávid") || n.includes("gravid") || n.includes("gestante"))
+    return "A Massagem para Grávidas é um tratamento suave e relaxante desenvolvido para proporcionar conforto. Com técnicas adaptadas, ajuda a aliviar as tensões físicas e emocionais desta fase tão especial.";
+
+  if (n.includes("desportiv") || n.includes("desporto") || n.includes("atleta"))
+    return "Técnica especializada indicada para atletas e pessoas fisicamente ativas. Com movimentos intensos, atua nos músculos exigidos pelo esforço físico, ajudando na recuperação, prevenção de lesões e alívio.";
+
+  if (n.includes("operatór") || n.includes("operatori") || n.includes("cirurgia"))
+    return "A Massagem Pós-Operatória é indicada para auxiliar na recuperação após cirurgias estéticas. Realizada com técnicas suaves e cuidadosas, ajuda a reduzir o inchaço, melhorar a circulação e acelerar o processo.";
+
+  if (n.includes("hydro") || n.includes("hidro") || n.includes("hidrofacial"))
+    return "Desperte a luminosidade adormecida com este tratamento de vanguarda. Hidratação profunda, remoção de impurezas e renovação celular numa só experiência transformadora.";
+
+  return "Uma experiência de bem-estar criada exclusivamente para si — porque a sua beleza merece um cuidado verdadeiramente especial.";
+}
+
+// ─── CATEGORIAS ───────────────────────────────────────────
+const TABS_CAT = [
+  { key: "Facial",            label: "Rosto"        },
+  { key: "Corporal",          label: "Corpo"        },
+  { key: "Massagem",          label: "Massagens"    },
+  { key: "Estética Avançada", label: "Avançado"     },
+  { key: "Capilar",           label: "Capilar"      },
+  { key: "Aparatologia",      label: "Aparatologia" },
+];
+
+const FAQ = [
+  { q: "Como posso marcar uma consulta?",                            a: "Pode marcar diretamente neste site, pelo WhatsApp ou por telefone. Após submeter o formulário, a nossa equipa entrará em contacto para confirmar a disponibilidade." },
+  { q: "Qual é a política de cancelamento?",                        a: "Pedimos que nos avise com pelo menos 24 horas de antecedência em caso de cancelamento ou remarcação, para podermos disponibilizar o horário a outros clientes." },
+  { q: "Os tratamentos são adequados para todos os tipos de pele?", a: "Sim! Adaptamos todos os tratamentos ao seu tipo de pele específico. Na primeira consulta realizamos uma análise completa para personalizar a sua experiência." },
+  { q: "Quanto tempo dura cada tratamento?",                        a: "A duração varia consoante o serviço, entre 45 minutos e 2 horas. Pode consultar a duração de cada tratamento no catálogo de serviços." },
+];
+
+// ─── ESTILOS BASE ─────────────────────────────────────────
 const S = {
-  btnRose:  { background: C.rose, color: C.white, border: "none", borderRadius: "10px", fontWeight: 700, cursor: "pointer", fontFamily: FONT_BODY } as React.CSSProperties,
-  btnOut:   { background: C.white, color: C.text2, border: `1.5px solid ${C.roseMid}`, borderRadius: "10px", fontWeight: 600, cursor: "pointer", fontFamily: FONT_BODY } as React.CSSProperties,
-  mini:     { borderRadius: "8px", padding: "5px 11px", fontSize: "0.78rem", fontWeight: 600, cursor: "pointer", border: "none", fontFamily: FONT_BODY } as React.CSSProperties,
-  inp:      { width: "100%", background: C.bgAlt, border: `1.5px solid ${C.roseMid}`, borderRadius: "10px", color: C.text, fontSize: "0.9rem", padding: "0.65rem 0.85rem", outline: "none", boxSizing: "border-box" as const, fontFamily: FONT_BODY, colorScheme: "light" as const, marginBottom: "0.2rem" } as React.CSSProperties,
-  lbl:      { color: C.text2, fontSize: "0.7rem", letterSpacing: "0.1em", textTransform: "uppercase" as const, marginBottom: "5px", display: "block", marginTop: "0.75rem", fontFamily: FONT_BODY } as React.CSSProperties,
-  card:     { background: C.white, border: `1px solid ${C.roseMid}`, borderRadius: "12px", padding: "0.9rem 1.1rem", display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" as const, boxShadow: `0 2px 12px rgba(236,168,169,0.1)` } as React.CSSProperties,
-  secTitle: { fontFamily: FONT_TITLE, color: C.text, fontWeight: 700, fontSize: "1.3rem", margin: "0 0 1.25rem", letterSpacing: "-0.01em" } as React.CSSProperties,
+  btnRose: {
+    background: C.rose, color: C.white, border: "none",
+    borderRadius: "30px", fontWeight: 600, cursor: "pointer",
+    fontFamily: FONT_BODY, letterSpacing: "0.03em",
+  } as React.CSSProperties,
+  btnGhost: {
+    background: "transparent", color: C.roseDark,
+    border: `1.5px solid ${C.rose}`, borderRadius: "30px",
+    fontWeight: 600, cursor: "pointer", fontFamily: FONT_BODY,
+    textDecoration: "none", display: "inline-flex",
+    alignItems: "center", justifyContent: "center",
+  } as React.CSSProperties,
+  lbl: {
+    color: C.text2, fontSize: "0.72rem", letterSpacing: "0.1em",
+    textTransform: "uppercase" as const, marginBottom: "5px",
+    display: "block", marginTop: "0.8rem", fontFamily: FONT_BODY,
+  } as React.CSSProperties,
+  inp: {
+    width: "100%", background: C.bgAlt,
+    border: `1.5px solid ${C.roseMid}`, borderRadius: "12px",
+    color: C.text, fontSize: "0.9rem", padding: "0.7rem 0.9rem",
+    outline: "none", boxSizing: "border-box" as const,
+    fontFamily: FONT_BODY, colorScheme: "light" as const,
+    marginBottom: "0.1rem",
+  } as React.CSSProperties,
 };
 
 // ─── COMPONENTE ───────────────────────────────────────────
-export default function AdminPage() {
-  const [auth,        setAuth]        = useState(false);
-  const [pwd,         setPwd]         = useState("");
-  const [pwdErr,      setPwdErr]      = useState(false);
-  const [tab,         setTab]         = useState<Tab>("resumo");
-  const [citas,       setCitas]       = useState<CitaRow[]>([]);
-  const [clientes,    setClientes]    = useState<Cliente[]>([]);
+export default function ClientePage() {
   const [servicios,   setServicios]   = useState<Servicio[]>([]);
-  const [diaVer,      setDiaVer]      = useState(hojeISO());
-  const [fatHoje,     setFatHoje]     = useState(0);
-  const [fatSemana,   setFatSemana]   = useState(0);
-  const [fatMes,      setFatMes]      = useState(0);
-  const [modalWalkin, setModalWalkin] = useState(false);
-  const [walkinHora,  setWalkinHora]  = useState("");
-  const [editPreco,   setEditPreco]   = useState<Record<string, string>>({});
+  const [citasRaw,    setCitasRaw]    = useState<CitaOcupada[]>([]);
+  const [form,        setForm]        = useState<FormState>({ nome: "", telefone: "", servico_id: "", data: hojeISO(), hora: "" });
+  const [loading,     setLoading]     = useState(false);
+  const [success,     setSuccess]     = useState(false);
+  const [erro,        setErro]        = useState<string | null>(null);
+  const [modal,       setModal]       = useState(false);
+  const [tabCat,      setTabCat]      = useState("Facial");
+  const [faqOpen,     setFaqOpen]     = useState<number | null>(null);
+  const [heroVisible, setHeroVisible] = useState(false);
+  const [menuOpen,    setMenuOpen]    = useState(false);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
 
-  // Walk-in form
-  const [wNome,       setWNome]       = useState("");
-  const [wTelefone,   setWTelefone]   = useState("");
-  const [wServicoId,  setWServicoId]  = useState("");
-  const [wHora,       setWHora]       = useState("");
-  const [wPreco,      setWPreco]      = useState("");   // precio editable
+  useEffect(() => { setTimeout(() => setHeroVisible(true), 100); }, []);
 
-  const fetchCitas = useCallback(async () => {
-    const { ini, fim } = diaBounds(diaVer);
-    const { data } = await supabase.from("citas")
-      .select("id, fecha_hora, estado, notas, clientes(id, nombre, telefono), servicios(nombre, precio)")
-      .gte("fecha_hora", ini).lte("fecha_hora", fim).order("fecha_hora");
-    if (data) setCitas(data as unknown as CitaRow[]);
-  }, [diaVer]);
-
-  const fetchFatHoje = useCallback(async () => {
-    const { ini, fim } = diaBounds(hojeISO());
-    const { data } = await supabase.from("citas").select("servicios(precio)")
-      .eq("estado","completada").gte("fecha_hora",ini).lte("fecha_hora",fim);
-    if (data) setFatHoje(data.reduce((a:number,c:any)=>a+(c.servicios?.precio??0),0));
-  }, []);
-
-  const fetchFatSemana = useCallback(async () => {
-    const { ini, fim } = semanaBounds();
-    const { data } = await supabase.from("citas").select("servicios(precio)")
-      .eq("estado","completada").gte("fecha_hora",ini).lte("fecha_hora",fim);
-    if (data) setFatSemana(data.reduce((a:number,c:any)=>a+(c.servicios?.precio??0),0));
-  }, []);
-
-  const fetchFatMes = useCallback(async () => {
-    const { ini, fim } = mesBounds();
-    const { data } = await supabase.from("citas").select("servicios(precio)")
-      .eq("estado","completada").gte("fecha_hora",ini).lte("fecha_hora",fim);
-    if (data) setFatMes(data.reduce((a:number,c:any)=>a+(c.servicios?.precio??0),0));
-  }, []);
-
-  const fetchClientes = useCallback(async () => {
-    const { data } = await supabase.from("clientes")
-      .select("id, nombre, telefono, citas_asistidas, citas_perdidas").order("nombre");
-    if (data) setClientes(data);
-  }, []);
-
-  const fetchServicios = useCallback(async () => {
-    const { data } = await supabase.from("servicios")
-      .select("id, nombre, precio, activo, duracion_minutos").order("nombre");
-    if (data) {
-      setServicios(data);
-      const ep: Record<string,string> = {};
-      data.forEach((sv:Servicio) => { ep[sv.id] = String(sv.precio); });
-      setEditPreco(ep);
+  // Canvas partículas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    let animId: number;
+    const particles: { x: number; y: number; r: number; dx: number; dy: number; alpha: number }[] = [];
+    function resize() {
+      if (!canvas) return;
+      canvas.width  = canvas.offsetWidth;
+      canvas.height = canvas.offsetHeight;
     }
+    resize();
+    window.addEventListener("resize", resize);
+    for (let i = 0; i < 55; i++) {
+      particles.push({
+        x:     Math.random() * (canvas.width  || 800),
+        y:     Math.random() * (canvas.height || 600),
+        r:     Math.random() * 2.5 + 0.5,
+        dx:    (Math.random() - 0.5) * 0.3,
+        dy:    -Math.random() * 0.4 - 0.1,
+        alpha: Math.random() * 0.5 + 0.1,
+      });
+    }
+    function draw() {
+      if (!ctx || !canvas) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      particles.forEach(p => {
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(236,168,169,${p.alpha})`; ctx.fill();
+        p.x += p.dx; p.y += p.dy;
+        if (p.y < -5) { p.y = canvas.height + 5; p.x = Math.random() * canvas.width; }
+        if (p.x < -5 || p.x > canvas.width + 5) p.dx *= -1;
+      });
+      animId = requestAnimationFrame(draw);
+    }
+    draw();
+    return () => { cancelAnimationFrame(animId); window.removeEventListener("resize", resize); };
   }, []);
 
   useEffect(() => {
-    if (!auth) return;
-    fetchCitas(); fetchFatHoje(); fetchFatSemana(); fetchFatMes(); fetchClientes(); fetchServicios();
-  }, [auth, fetchCitas, fetchFatHoje, fetchFatSemana, fetchFatMes, fetchClientes, fetchServicios]);
+    supabase.from("servicios")
+      .select("id, nombre, precio, duracion_minutos, categoria")
+      .eq("activo", true)
+      .then(({ data }) => { if (data) setServicios(data); });
+  }, []);
 
-  // Actualizar precio por defecto cuando cambia servicio en walk-in
   useEffect(() => {
-    const sv = servicios.find(s => s.id === wServicoId);
-    if (sv) setWPreco(String(sv.precio));
-    else setWPreco("");
-  }, [wServicoId, servicios]);
+    if (!form.data) return;
+    const ini = new Date(`${form.data}T00:00:00`).toISOString();
+    const fim = new Date(`${form.data}T23:59:59`).toISOString();
+    supabase.from("citas").select("fecha_hora")
+      .gte("fecha_hora", ini).lte("fecha_hora", fim).neq("estado", "cancelada")
+      .then(({ data }) => { if (data) setCitasRaw(data as CitaOcupada[]); });
+  }, [form.data]);
 
-  async function marcarEstado(id: string, estado: string) {
-    await supabase.from("citas").update({ estado }).eq("id", id);
-    fetchCitas(); fetchFatHoje(); fetchFatSemana(); fetchFatMes();
+  const servicoSel  = servicios.find(s => s.id === form.servico_id);
+  const duracao     = servicoSel?.duracion_minutos ?? 30;
+  const slotsBase   = citasRaw.flatMap(c => slotsOcupados(c.fecha_hora, 60));
+  const bloqDuracao = horasBloqueadasPorDuracao(slotsBase, duracao);
+  const bloqPasado  = form.data === hojeISO() ? horasPasadas() : [];
+  const todasBloq   = new Set([...slotsBase, ...bloqDuracao, ...bloqPasado]);
+
+  function campo(f: keyof FormState, v: string) {
+    if (f === "servico_id" || f === "data") setForm(p => ({ ...p, [f]: v, hora: "" }));
+    else setForm(p => ({ ...p, [f]: v }));
+    setErro(null);
   }
 
-  async function guardarWalkin() {
-    if (!wNome || !wServicoId || !wHora) return;
+  function abrirModal(servico_id?: string) {
+    if (servico_id) setForm(p => ({ ...p, servico_id, hora: "" }));
+    setSuccess(false); setErro(null); setModal(true); setMenuOpen(false);
+  }
+
+  function fecharModal() { setModal(false); setSuccess(false); setErro(null); }
+
+  async function reservar() {
+    const { nome, telefone, servico_id, data, hora } = form;
+    if (!nome || !telefone || !servico_id || !data || !hora) { setErro("Preencha todos os campos."); return; }
+    setLoading(true); setErro(null);
     let cliente_id: string;
-    const { data: ex } = await supabase.from("clientes").select("id").eq("telefono", wTelefone || wNome).single();
+    const { data: ex } = await supabase.from("clientes").select("id").eq("telefono", telefone).single();
     if (ex) {
       cliente_id = ex.id;
     } else {
-      const { data: nv } = await supabase.from("clientes")
-        .insert({ nombre: wNome, telefono: wTelefone || null }).select("id").single();
-      if (!nv) return;
+      const { data: nv, error: e } = await supabase.from("clientes")
+        .insert({ nombre: nome, telefono: telefone }).select("id").single();
+      if (e || !nv) { setErro("Erro ao registar cliente."); setLoading(false); return; }
       cliente_id = nv.id;
     }
-
-    // Calcular nota con precio especial si difiere
-    const sv          = servicios.find(s => s.id === wServicoId);
-    const precoBase   = sv?.precio ?? 0;
-    const precoCobr   = parseFloat(wPreco);
-    let notaFinal     = "Walk-in";
-    if (!isNaN(precoCobr) && precoCobr !== precoBase) {
-      notaFinal = `Walk-in [Preço Cobrado: ${precoCobr}€]`;
-    }
-
-    await supabase.from("citas").insert({
-      cliente_id,
-      servicio_id: wServicoId,
-      fecha_hora: new Date(`${diaVer}T${wHora}:00`).toISOString(),
-      estado: "confirmada",
-      notas: notaFinal,
-    });
-
-    setModalWalkin(false);
-    setWNome(""); setWTelefone(""); setWServicoId(""); setWHora(""); setWPreco(""); setWalkinHora("");
-    fetchCitas();
+    const fecha_hora = new Date(`${data}T${hora}:00`).toISOString();
+    const { error: ce } = await supabase.from("citas")
+      .insert({ cliente_id, servicio_id: servico_id, fecha_hora, estado: "pendiente" });
+    if (ce) setErro("Erro ao guardar marcação.");
+    else { setSuccess(true); setForm({ nome: "", telefone: "", servico_id: "", data: hojeISO(), hora: "" }); }
+    setLoading(false);
   }
 
-  async function toggleServico(id: string, activo: boolean) {
-    await supabase.from("servicios").update({ activo: !activo }).eq("id", id);
-    fetchServicios();
-  }
+  const serviciosFiltrados = servicios.filter(sv => (sv.categoria ?? "").trim() === tabCat);
 
-  async function guardarPreco(id: string) {
-    const precio = parseFloat(editPreco[id]);
-    if (isNaN(precio)) return;
-    await supabase.from("servicios").update({ precio }).eq("id", id);
-    fetchServicios();
-  }
-
-  function tentarLogin() {
-    if (pwd === PASSWORD) { setAuth(true); setPwdErr(false); }
-    else setPwdErr(true);
-  }
-
-  function abrirWalkin(hora?: string) {
-    if (hora) { setWalkinHora(hora); setWHora(hora); }
-    setModalWalkin(true);
-  }
-
-  // ── LOGIN ──
-  if (!auth) return (
-    <div style={{ minHeight: "100vh", background: C.bg, display: "flex", alignItems: "center", justifyContent: "center", fontFamily: FONT_BODY }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600;700&display=swap'); *,*::before,*::after{box-sizing:border-box}`}</style>
-      <div style={{ background: C.white, border: `1px solid ${C.roseMid}`, borderRadius: "24px", padding: "3rem 2.5rem", width: "100%", maxWidth: "380px", textAlign: "center", boxShadow: `0 12px 50px rgba(236,168,169,0.18)` }}>
-        <div style={{ width: "64px", height: "64px", background: C.roseLight, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem", fontSize: "1.6rem", color: C.rose }}>✦</div>
-        <h2 style={{ fontFamily: FONT_TITLE, color: C.text, fontWeight: 700, margin: "0 0 0.4rem", fontSize: "1.5rem" }}>Área Restrita</h2>
-        <p style={{ color: C.text2, fontSize: "0.85rem", marginBottom: "1.75rem" }}>Introduza a palavra-passe</p>
-        <input type="password" style={{ ...S.inp, textAlign: "center", marginBottom: "0.75rem" }} placeholder="••••••••" value={pwd}
-          onChange={e => { setPwd(e.target.value); setPwdErr(false); }}
-          onKeyDown={e => { if (e.key === "Enter") tentarLogin(); }} />
-        {pwdErr && <p style={{ color: C.red, fontSize: "0.82rem", marginBottom: "0.6rem" }}>Palavra-passe incorreta</p>}
-        <button style={{ ...S.btnRose, width: "100%", padding: "0.85rem", fontSize: "0.95rem" }} onClick={tentarLogin}>Entrar</button>
-      </div>
-    </div>
-  );
-
-  const citasAtivas  = citas.filter(c => c.estado !== "cancelada");
-  const citasConclui = citas.filter(c => c.estado === "completada");
-  const citasPend    = citas.filter(c => c.estado === "pendiente");
+  const CONTACTO_ROWS: [string, string, string, string | null][] = [
+    ["📍", "Morada",    "Rua Rodrigues Sampaio 146 1º esquerdo\n1150-282 Lisboa", null],
+    ["📞", "Telefone",  "+351 927 459 295",                                        "tel:+351927459295"],
+    ["✉️", "Email",     "glowestheticportugal@gmail.com",                          "mailto:glowestheticportugal@gmail.com"],
+    ["📸", "Instagram", `@${INSTAGRAM}`,                                           INSTAGRAM_URL],
+    ["🕒", "Horário",   "Segunda a Sexta\n11:00h às 19:00h",                       null],
+  ];
 
   return (
-    <div style={{ minHeight: "100vh", background: C.bg, fontFamily: FONT_BODY, color: C.text }}>
+    <div style={{ background: C.bg, minHeight: "100vh", color: C.text, fontFamily: FONT_BODY }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;600;700&display=swap');
-        *,*::before,*::after{box-sizing:border-box}
-        .tabs-scroll::-webkit-scrollbar{display:none}
-        .agenda-slot:hover{background:${C.roseLight} !important;cursor:pointer}
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@300;400;500;600;700&display=swap');
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html { scroll-behavior: smooth; } body { overflow-x: hidden; }
         input[type="date"]::-webkit-calendar-picker-indicator,
-        input[type="time"]::-webkit-calendar-picker-indicator{filter:invert(0.4);cursor:pointer}
-        @media(max-width:640px){
-          .fat-grid{grid-template-columns:1fr !important}
-          .resumo-grid{grid-template-columns:1fr 1fr !important}
+        input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.4); cursor: pointer; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: ${C.rose}; border-radius: 3px; }
+        .svc-card { transition: transform .25s ease, box-shadow .25s ease !important; }
+        .svc-card:hover { transform: translateY(-6px) !important; box-shadow: 0 16px 40px rgba(236,168,169,0.28) !important; }
+        .tab-pill:hover { background: ${C.roseMid} !important; }
+        .wa-btn:hover { transform: scale(1.1) !important; }
+        @keyframes shimmer { 0%,100%{opacity:1} 50%{opacity:0.7} }
+        @media (max-width: 640px) {
+          .nav-links { display: none !important; }
+          .nav-menu-btn { display: flex !important; }
+          .hero-btns { flex-direction: column !important; align-items: center !important; }
+          .tabs-scroll { overflow-x: auto !important; flex-wrap: nowrap !important; padding-bottom: 4px; -webkit-overflow-scrolling: touch; }
+          .tabs-scroll::-webkit-scrollbar { height: 0; }
+          .hora-grid { grid-template-columns: repeat(3, 1fr) !important; }
+          .contact-grid { grid-template-columns: 1fr !important; }
+          .footer-links { flex-direction: column !important; gap: 0.75rem !important; }
+        }
+        @media (min-width: 641px) {
+          .nav-menu-btn { display: none !important; }
+          .mobile-menu { display: none !important; }
         }
       `}</style>
 
-      {/* NAV */}
-      <nav style={{ background: C.white, borderBottom: `1px solid ${C.roseMid}`, display: "flex", alignItems: "center", gap: "1rem", padding: "0 1.5rem", height: "60px", position: "sticky", top: 0, zIndex: 50, boxShadow: `0 2px 16px rgba(236,168,169,0.1)` }}>
-        <span style={{ fontFamily: FONT_TITLE, color: C.rose, fontWeight: 700, fontSize: "1.15rem" }}>Glow</span>
-        <span style={{ color: C.roseDark, background: C.roseLight, border: `1px solid ${C.roseMid}`, borderRadius: "999px", fontSize: "0.65rem", padding: "2px 10px", fontWeight: 700, letterSpacing: "0.12em" }}>ADMIN</span>
-        <div style={{ flex: 1 }} />
-        <a href="/" style={{ color: C.text2, fontSize: "0.82rem", textDecoration: "none", fontWeight: 500 }}>← Vista Cliente</a>
+      {/* ── NAV ── */}
+      <nav style={{ background: "rgba(255,245,247,0.95)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", borderBottom: `1px solid ${C.roseMid}`, position: "sticky", top: 0, zIndex: 100, boxShadow: `0 2px 20px rgba(236,168,169,0.12)` }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 1.5rem", height: "68px", maxWidth: "1200px", margin: "0 auto" }}>
+          {/* MARCA NAV — tamanho aumentado */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: "7px" }}>
+            <span style={{ color: C.rose, fontWeight: 800, fontSize: "1.85rem", fontFamily: FONT_TITLE, letterSpacing: "0.04em", lineHeight: 1 }}>Glow</span>
+            <span style={{ color: C.roseDeep, fontSize: "0.85rem", letterSpacing: "0.22em", textTransform: "uppercase", fontWeight: 500, fontFamily: FONT_BODY }}>Esthetic</span>
+          </div>
+          <div className="nav-links" style={{ display: "flex", gap: "2rem", alignItems: "center" }}>
+            <a href="#servicos" style={{ color: C.text2, fontSize: "0.85rem", textDecoration: "none", fontWeight: 500 }}>Serviços</a>
+            <a href="#faq"      style={{ color: C.text2, fontSize: "0.85rem", textDecoration: "none", fontWeight: 500 }}>FAQ</a>
+            <a href="#contacto" style={{ color: C.text2, fontSize: "0.85rem", textDecoration: "none", fontWeight: 500 }}>Contacto</a>
+            <a href="/admin" style={{ color: C.text2, fontSize: "0.82rem", textDecoration: "none", fontWeight: 500, display: "flex", alignItems: "center", gap: "4px", border: `1px solid ${C.roseMid}`, borderRadius: "20px", padding: "4px 12px" }}>🔒 Equipa</a>
+            <button onClick={() => abrirModal()} style={{ ...S.btnRose, padding: "0.6rem 1.5rem", fontSize: "0.85rem" }}>Marcar Agora</button>
+          </div>
+          <button className="nav-menu-btn"
+            style={{ background: "none", border: "none", cursor: "pointer", display: "none", flexDirection: "column", gap: "5px", padding: "4px" }}
+            onClick={() => setMenuOpen(v => !v)}>
+            {[0,1,2].map(i => <span key={i} style={{ display: "block", width: "24px", height: "2px", background: C.roseDark, borderRadius: "2px" }} />)}
+          </button>
+        </div>
+        {menuOpen && (
+          <div className="mobile-menu" style={{ background: C.white, borderTop: `1px solid ${C.roseMid}`, padding: "1rem 1.5rem 1.25rem", display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+            {[["#servicos","Serviços"],["#faq","FAQ"],["#contacto","Contacto"]].map(([href, label]) => (
+              <a key={href} href={href} onClick={() => setMenuOpen(false)} style={{ color: C.text, fontSize: "0.95rem", textDecoration: "none", fontWeight: 500, padding: "0.4rem 0", borderBottom: `1px solid ${C.roseMid}` }}>{label}</a>
+            ))}
+            <a href="/admin" style={{ color: C.text2, fontSize: "0.88rem", textDecoration: "none", fontWeight: 500, padding: "0.4rem 0", borderBottom: `1px solid ${C.roseMid}`, display: "flex", alignItems: "center", gap: "6px" }}>🔒 Acesso Equipa</a>
+            <button onClick={() => abrirModal()} style={{ ...S.btnRose, padding: "0.75rem", fontSize: "0.95rem", marginTop: "0.25rem" }}>Marcar Agora</button>
+          </div>
+        )}
       </nav>
 
-      <div style={{ maxWidth: "1100px", margin: "0 auto", padding: "1.75rem 1rem" }}>
+      {/* ── HERO ── */}
+      <section style={{ position: "relative", minHeight: "96vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "4rem 1.5rem 7rem", overflow: "hidden", background: `linear-gradient(155deg,#fff0f1 0%,#fce4e4 40%,#f8d0d0 100%)` }}>
+        {/* Fundo textura subtil */}
+        <div style={{ position: "absolute", inset: 0, backgroundImage: `url("https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1400&q=55")`, backgroundSize: "cover", backgroundPosition: "center", opacity: 0.07 }} />
+        {/* Canvas partículas */}
+        <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
 
-        {/* TABS */}
-        <div className="tabs-scroll" style={{ display: "flex", gap: "0.35rem", background: C.white, borderRadius: "14px", padding: "5px", marginBottom: "2rem", border: `1px solid ${C.roseMid}`, boxShadow: `0 2px 12px rgba(236,168,169,0.1)`, overflowX: "auto", flexWrap: "nowrap", WebkitOverflowScrolling: "touch", scrollbarWidth: "none", width: "100%" }}>
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)}
-              style={{ background: tab === t.key ? C.rose : "transparent", color: tab === t.key ? C.white : C.text2, border: "none", borderRadius: "10px", fontSize: "0.82rem", fontWeight: 600, padding: "0.5rem 1.1rem", cursor: "pointer", transition: "all .2s", fontFamily: FONT_BODY, display: "flex", alignItems: "center", gap: "0.35rem", whiteSpace: "nowrap", flexShrink: 0 }}>
-              <span>{t.icon}</span><span>{t.label}</span>
+        <div style={{ position: "relative", zIndex: 2, maxWidth: "780px", width: "100%", opacity: heroVisible ? 1 : 0, transition: "opacity 1s ease, transform 1s ease", transform: heroVisible ? "translateY(0)" : "translateY(28px)" }}>
+
+          {/* ── MARCA HERO — protagonismo máximo ── */}
+          <div style={{ marginBottom: "1rem" }}>
+            <h2 style={{
+              fontFamily: FONT_TITLE,
+              fontSize: "clamp(2.8rem, 7vw, 5rem)",
+              fontWeight: 800,
+              color: C.roseDeep,
+              letterSpacing: "0.06em",
+              lineHeight: 1,
+              margin: 0,
+            }}>
+              Glow Esthetic
+            </h2>
+            <div style={{ width: "60px", height: "2px", background: `linear-gradient(90deg, transparent, ${C.rose}, transparent)`, margin: "0.75rem auto 0" }} />
+          </div>
+
+          {/* Pill localização */}
+          <div style={{ display: "inline-block", background: "rgba(255,255,255,0.72)", backdropFilter: "blur(8px)", color: C.roseDeep, fontSize: "0.68rem", letterSpacing: "0.28em", textTransform: "uppercase", padding: "6px 20px", borderRadius: "999px", marginBottom: "1.6rem", border: `1px solid ${C.roseMid}`, fontWeight: 600 }}>
+            Centro de Estética · Lisboa
+          </div>
+
+          <h1 style={{ fontFamily: FONT_TITLE, fontSize: "clamp(1.9rem,5vw,3.8rem)", fontWeight: 700, color: C.text, lineHeight: 1.12, letterSpacing: "-0.02em", marginBottom: "1.1rem" }}>
+            A arte de <em style={{ color: C.rose, fontStyle: "italic" }}>cuidar</em><br />a sua beleza
+          </h1>
+
+          <p style={{ color: C.text2, fontSize: "clamp(0.92rem,2.5vw,1.05rem)", lineHeight: 1.75, marginBottom: "0.65rem", fontWeight: 300 }}>
+            Experiências de bem-estar desde <strong style={{ color: C.roseDeep, fontWeight: 600 }}>35€</strong>
+          </p>
+          <p style={{ color: C.text3, fontSize: "0.85rem", marginBottom: "2.5rem" }}>Rua Rodrigues Sampaio 146, Lisboa</p>
+
+          <div className="hero-btns" style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
+            <button onClick={() => abrirModal()} style={{ ...S.btnRose, padding: "1rem 2.5rem", fontSize: "1rem", boxShadow: `0 8px 28px rgba(236,168,169,0.45)` }}>
+              Reservar Experiência
+            </button>
+            <a href="#servicos" style={{ ...S.btnGhost, padding: "1rem 2.5rem", fontSize: "1rem" }}>
+              Ver Serviços
+            </a>
+          </div>
+        </div>
+
+        {/* Wave SVG */}
+        <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, lineHeight: 0 }}>
+          <svg viewBox="0 0 1440 80" preserveAspectRatio="none" style={{ width: "100%", height: "70px", display: "block" }}>
+            <path d="M0,40 C240,80 480,0 720,40 C960,80 1200,0 1440,40 L1440,80 L0,80 Z" fill={C.bg} />
+          </svg>
+        </div>
+      </section>
+
+      {/* ── SERVIÇOS ── */}
+      <section id="servicos" style={{ padding: "5rem 1.5rem", maxWidth: "1060px", margin: "0 auto" }}>
+        <div style={{ textAlign: "center", marginBottom: "2.75rem" }}>
+          <p style={{ color: C.rose, fontSize: "0.72rem", letterSpacing: "0.25em", textTransform: "uppercase", fontWeight: 600, marginBottom: "0.6rem" }}>Os Nossos Tratamentos</p>
+          <h2 style={{ fontFamily: FONT_TITLE, fontSize: "clamp(1.7rem,4vw,2.8rem)", fontWeight: 700, color: C.text }}>Cuide da sua pele</h2>
+          <p style={{ color: C.text2, fontSize: "0.95rem", marginTop: "0.75rem" }}>Escolha o tratamento ideal para si</p>
+        </div>
+        <div className="tabs-scroll" style={{ display: "flex", justifyContent: "center", gap: "0.5rem", marginBottom: "2.5rem", flexWrap: "wrap" }}>
+          {TABS_CAT.map(t => (
+            <button key={t.key} className="tab-pill" onClick={() => setTabCat(t.key)}
+              style={{ background: tabCat === t.key ? C.rose : C.white, color: tabCat === t.key ? C.white : C.text2, border: `1.5px solid ${tabCat === t.key ? C.rose : C.roseMid}`, borderRadius: "30px", padding: "0.5rem 1.35rem", fontSize: "0.83rem", fontWeight: 600, cursor: "pointer", whiteSpace: "nowrap", fontFamily: FONT_BODY }}>
+              {t.label}
             </button>
           ))}
         </div>
-
-        {/* ── RESUMO ── */}
-        {tab === "resumo" && (
-          <div>
-            <h2 style={S.secTitle}>Resumo Financeiro</h2>
-            <div className="fat-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
-              {([
-                { label: "Faturamento Hoje",   value: `${fatHoje} €`,   icon: "💰", color: C.roseDeep, bg: C.roseLight },
-                { label: "Faturamento Semana", value: `${fatSemana} €`, icon: "📈", color: C.blue,     bg: C.blueBg    },
-                { label: "Faturamento Mês",    value: `${fatMes} €`,    icon: "🗓️", color: C.green,    bg: C.greenBg   },
-              ] as { label:string; value:string; icon:string; color:string; bg:string }[]).map(({ label, value, icon, color, bg }) => (
-                <div key={label} style={{ background: C.white, border: `1px solid ${C.roseMid}`, borderRadius: "16px", padding: "1.25rem 1.4rem", boxShadow: `0 3px 16px rgba(236,168,169,0.1)` }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                    <div style={{ background: bg, borderRadius: "10px", width: "34px", height: "34px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.95rem" }}>{icon}</div>
-                    <span style={{ color: C.text2, fontSize: "0.7rem", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600, lineHeight: 1.3 }}>{label}</span>
+        {serviciosFiltrados.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "3rem 1rem", color: C.text2 }}>
+            <div style={{ fontSize: "2rem", marginBottom: "1rem" }}>✦</div>
+            <p style={{ fontFamily: FONT_TITLE, fontSize: "1.1rem", color: C.roseDark, marginBottom: "0.5rem" }}>Em breve disponível</p>
+            <p style={{ fontSize: "0.88rem" }}>Estamos a preparar tratamentos incríveis para esta categoria.</p>
+          </div>
+        ) : (
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(290px, 1fr))", gap: "1.75rem" }}>
+            {serviciosFiltrados.map(sv => (
+              <div key={sv.id} className="svc-card" style={{ background: C.white, borderRadius: "20px", overflow: "hidden", boxShadow: "0 4px 24px rgba(236,168,169,0.13)", border: `1px solid ${C.roseMid}` }}>
+                <div style={{ height: "210px", overflow: "hidden", position: "relative", background: C.roseLight }}>
+                  <img
+                    src={getImagem(sv.nombre)}
+                    alt={sv.nombre}
+                    loading="lazy"
+                    style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    onError={e => { (e.currentTarget as HTMLImageElement).src = IMG_DEFAULT; }}
+                  />
+                  <div style={{ position: "absolute", top: "12px", right: "12px", background: "rgba(255,255,255,0.88)", backdropFilter: "blur(6px)", borderRadius: "999px", padding: "4px 12px", fontSize: "0.7rem", color: C.roseDeep, fontWeight: 600 }}>
+                    {sv.duracion_minutos} min
                   </div>
-                  <div style={{ color, fontSize: "1.75rem", fontWeight: 800, fontFamily: FONT_TITLE }}>{value}</div>
                 </div>
-              ))}
-            </div>
-            <div className="resumo-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "1.75rem" }}>
-              {([
-                { label:"Total Marcações", value:String(citasAtivas.length),  color:C.blue,  bg:C.blueBg,  icon:"📅" },
-                { label:"Concluídas",      value:String(citasConclui.length), color:C.green, bg:C.greenBg, icon:"✅" },
-                { label:"Pendentes",       value:String(citasPend.length),    color:C.amber, bg:C.amberBg, icon:"⏳" },
-              ] as { label:string; value:string; color:string; bg:string; icon:string }[]).map(({ label, value, color, bg, icon }) => (
-                <div key={label} style={{ background: C.white, border: `1px solid ${C.roseMid}`, borderRadius: "14px", padding: "1rem 1.25rem", boxShadow: `0 2px 10px rgba(236,168,169,0.08)` }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", marginBottom: "0.6rem" }}>
-                    <div style={{ background: bg, borderRadius: "8px", width: "30px", height: "30px", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.85rem" }}>{icon}</div>
-                    <span style={{ color: C.text2, fontSize: "0.68rem", textTransform: "uppercase", letterSpacing: "0.08em", fontWeight: 600 }}>{label}</span>
-                  </div>
-                  <div style={{ color, fontSize: "1.6rem", fontWeight: 800, fontFamily: FONT_TITLE }}>{value}</div>
-                </div>
-              ))}
-            </div>
-            <div style={{ background: C.white, border: `1px solid ${C.roseMid}`, borderRadius: "16px", padding: "1.4rem 1.5rem", boxShadow: `0 3px 16px rgba(236,168,169,0.1)` }}>
-              <h3 style={{ color: C.text, fontWeight: 700, fontSize: "0.95rem", margin: "0 0 1rem", fontFamily: FONT_TITLE }}>Próximas Hoje</h3>
-              {citasAtivas.slice(0,6).length === 0
-                ? <p style={{ color:C.text3, fontSize:"0.85rem" }}>Sem marcações hoje.</p>
-                : citasAtivas.slice(0,6).map(c => {
-                    const hora = horaMinDeISO(c.fecha_hora);
-                    const cor  = ESTADO_COLOR[c.estado] ?? C.rose;
-                    const precoCobrado = extrairPrecoCobrado(c.notas);
-                    return (
-                      <div key={c.id} style={{ display:"flex", alignItems:"center", gap:"0.75rem", padding:"0.6rem 0", borderBottom:`1px solid ${C.roseMid}`, flexWrap:"wrap" }}>
-                        <span style={{ color:C.roseDeep, fontWeight:700, fontSize:"0.85rem", minWidth:"42px" }}>{hora}</span>
-                        <span style={{ color:C.text, fontSize:"0.85rem", flex:1, fontWeight:500, minWidth:"100px" }}>{c.clientes?.nombre ?? "—"}</span>
-                        <span style={{ color:C.text2, fontSize:"0.78rem" }}>{c.servicios?.nombre ?? "—"}</span>
-                        <span style={{ color:C.roseDeep, fontSize:"0.8rem", fontWeight:700 }}>
-                          {precoCobrado ? `${precoCobrado} €` : `${c.servicios?.precio ?? "—"} €`}
-                          {precoCobrado && <span style={{ color:C.amber, fontSize:"0.7rem", marginLeft:"4px" }}>★</span>}
-                        </span>
-                        <span style={{ color:cor, background:cor+"18", borderRadius:"999px", fontSize:"0.7rem", padding:"2px 10px", fontWeight:600, border:`1px solid ${cor}33` }}>{c.estado}</span>
-                      </div>
-                    );
-                  })
-              }
-            </div>
-          </div>
-        )}
-
-        {/* ── CALENDÁRIO ── */}
-        {tab === "calendario" && (
-          <div>
-            <div style={{ display:"flex", alignItems:"center", gap:"0.75rem", marginBottom:"1.5rem", flexWrap:"wrap" }}>
-              <h2 style={{ ...S.secTitle, margin:0 }}>Agenda</h2>
-              <input type="date" value={diaVer} onChange={e => setDiaVer(e.target.value)} style={{ ...S.inp, width:"auto", padding:"0.45rem 0.8rem", fontSize:"0.85rem" }} />
-              <button onClick={fetchCitas} style={{ ...S.btnOut, padding:"0.45rem 0.9rem", fontSize:"0.82rem" }}>↻</button>
-              <div style={{ flex:1 }} />
-              <button onClick={() => abrirWalkin()} style={{ ...S.btnRose, padding:"0.6rem 1.25rem", fontSize:"0.83rem" }}>+ Nova Marcação</button>
-            </div>
-            <div style={{ background:C.white, border:`1px solid ${C.roseMid}`, borderRadius:"16px", overflow:"hidden", boxShadow:`0 4px 20px rgba(236,168,169,0.1)` }}>
-              {HORAS_AGENDA.map((hora, idx) => {
-                const citasNaHora = citas.filter(c => horaDeISO(c.fecha_hora) === hora);
-                const vazia       = citasNaHora.length === 0;
-                return (
-                  <div key={hora} style={{ display:"flex", minHeight:vazia?"58px":"auto", borderBottom:idx < HORAS_AGENDA.length-1 ? `1px solid ${C.roseMid}` : "none" }}>
-                    <div style={{ width:"62px", flexShrink:0, display:"flex", alignItems:"flex-start", justifyContent:"center", paddingTop:"14px", borderRight:`1px solid ${C.roseMid}`, background:C.bgAlt }}>
-                      <span style={{ color:C.roseDeep, fontWeight:700, fontSize:"0.8rem" }}>{hora}</span>
-                    </div>
-                    <div style={{ flex:1, padding:vazia?"0":"0.6rem 0.75rem", display:"flex", flexDirection:"column", gap:"0.4rem" }}>
-                      {vazia ? (
-                        <div className="agenda-slot" onClick={() => abrirWalkin(hora)}
-                          style={{ flex:1, display:"flex", alignItems:"center", paddingLeft:"1rem", color:C.text3, fontSize:"0.78rem", transition:"background .15s", minHeight:"58px" }}>
-                          <span style={{ opacity:0.5 }}>+ Adicionar marcação</span>
-                        </div>
-                      ) : (
-                        citasNaHora.map(c => {
-                          const horaCita     = horaMinDeISO(c.fecha_hora);
-                          const cor          = ESTADO_COLOR[c.estado] ?? C.rose;
-                          const precoCobrado = extrairPrecoCobrado(c.notas);
-                          // Nota limpia sin el tag de precio
-                          const notaLimpa    = c.notas ? c.notas.replace(/\[Preço Cobrado:.*?\]/g,"").replace("Walk-in","").trim() : "";
-                          return (
-                            <div key={c.id} style={{ background:cor+"10", border:`1px solid ${cor}33`, borderLeft:`3px solid ${cor}`, borderRadius:"10px", padding:"0.65rem 0.9rem", display:"flex", alignItems:"center", gap:"0.75rem", flexWrap:"wrap" }}>
-                              <span style={{ color:cor, fontWeight:800, fontSize:"0.82rem", minWidth:"38px" }}>{horaCita}</span>
-                              <div style={{ flex:1, minWidth:"100px" }}>
-                                <div style={{ color:C.text, fontWeight:600, fontSize:"0.88rem" }}>{c.clientes?.nombre ?? "—"}</div>
-                                <div style={{ color:C.text2, fontSize:"0.74rem", marginTop:"1px" }}>
-                                  {c.servicios?.nombre ?? "—"} ·{" "}
-                                  {precoCobrado ? (
-                                    <span>
-                                      <strong style={{ color:C.amber }}>{precoCobrado} €</strong>
-                                      <span style={{ color:C.text3, textDecoration:"line-through", marginLeft:"4px", fontSize:"0.7rem" }}>{c.servicios?.precio} €</span>
-                                    </span>
-                                  ) : (
-                                    <strong style={{ color:C.roseDeep }}>{c.servicios?.precio ?? "—"} €</strong>
-                                  )}
-                                  {notaLimpa ? ` · ${notaLimpa}` : ""}
-                                  {c.notas?.includes("Walk-in") && <span style={{ color:C.text3, fontSize:"0.7rem", marginLeft:"4px" }}>(Walk-in)</span>}
-                                </div>
-                              </div>
-                              <span style={{ color:C.text2, fontSize:"0.75rem" }}>{c.clientes?.telefono ?? ""}</span>
-                              <span style={{ color:cor, background:cor+"18", borderRadius:"999px", fontSize:"0.68rem", padding:"2px 9px", fontWeight:600, border:`1px solid ${cor}33` }}>{c.estado}</span>
-                              <div style={{ display:"flex", gap:"0.35rem" }}>
-                                {c.estado !== "completada" && (
-                                  <button onClick={() => marcarEstado(c.id,"completada")} style={{ ...S.mini, background:C.greenBg, color:C.green, border:`1px solid ${C.greenBd}` }}>✓</button>
-                                )}
-                                {c.estado !== "cancelada" && (
-                                  <button onClick={() => marcarEstado(c.id,"cancelada")} style={{ ...S.mini, background:C.redBg, color:C.red, border:`1px solid ${C.redBd}` }}>✕</button>
-                                )}
-                                {c.clientes?.telefono && (
-                                  <a href={`https://wa.me/+${c.clientes.telefono.replace(/\D/g,"")}?text=Olá%20${encodeURIComponent(c.clientes.nombre??"")}!%20Lembramos%20a%20sua%20marcação%20às%20${horaCita}%20na%20Glow%20Esthetic%20✦`}
-                                    target="_blank" rel="noreferrer"
-                                    style={{ ...S.mini, background:C.greenBg, color:C.green, border:`1px solid ${C.greenBd}`, textDecoration:"none", display:"inline-flex", alignItems:"center" }}>💬</a>
-                                )}
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {/* ── CRM ── */}
-        {tab === "crm" && (
-          <div>
-            <h2 style={S.secTitle}>Clientes ({clientes.length})</h2>
-            <div style={{ display:"flex", flexDirection:"column", gap:"0.65rem" }}>
-              {clientes.length === 0
-                ? <p style={{ color:C.text2, fontSize:"0.88rem" }}>Sem clientes registados.</p>
-                : clientes.map(cl => (
-                    <div key={cl.id} style={S.card}>
-                      <div style={{ width:"40px", height:"40px", background:C.roseLight, borderRadius:"50%", display:"flex", alignItems:"center", justifyContent:"center", color:C.roseDeep, fontWeight:800, fontSize:"1rem", flexShrink:0, fontFamily:FONT_TITLE }}>
-                        {cl.nombre.charAt(0).toUpperCase()}
-                      </div>
-                      <div style={{ flex:1, minWidth:"100px" }}>
-                        <div style={{ color:C.text, fontWeight:600, fontSize:"0.92rem" }}>{cl.nombre}</div>
-                        <div style={{ color:C.text2, fontSize:"0.76rem", marginTop:"2px" }}>{cl.telefono ?? "sem telefone"}</div>
-                      </div>
-                      <div style={{ display:"flex", gap:"0.5rem", flexWrap:"wrap" }}>
-                        <span style={{ color:C.green, background:C.greenBg, border:`1px solid ${C.greenBd}`, borderRadius:"999px", padding:"3px 11px", fontSize:"0.76rem", fontWeight:600 }}>✓ {cl.citas_asistidas}</span>
-                        <span style={{ color:C.red,   background:C.redBg,   border:`1px solid ${C.redBd}`,   borderRadius:"999px", padding:"3px 11px", fontSize:"0.76rem", fontWeight:600 }}>✕ {cl.citas_perdidas}</span>
-                      </div>
-                      {cl.telefono && (
-                        <a href={`https://wa.me/+${cl.telefono.replace(/\D/g,"")}?text=Olá%20${encodeURIComponent(cl.nombre)}!%20Não%20se%20esqueça%20da%20sua%20próxima%20marcação%20na%20Glow%20Esthetic%20✦`}
-                          target="_blank" rel="noreferrer"
-                          style={{ background:C.wa, color:C.white, borderRadius:"9px", padding:"6px 14px", fontSize:"0.78rem", fontWeight:700, textDecoration:"none", display:"inline-flex", alignItems:"center", gap:"5px", boxShadow:"0 2px 8px rgba(37,211,102,0.3)", whiteSpace:"nowrap" }}>
-                          💬 WhatsApp
-                        </a>
-                      )}
-                    </div>
-                  ))
-              }
-            </div>
-          </div>
-        )}
-
-        {/* ── SERVIÇOS ── */}
-        {tab === "servicos" && (
-          <div>
-            <h2 style={S.secTitle}>Serviços</h2>
-            <div style={{ display:"flex", flexDirection:"column", gap:"0.65rem" }}>
-              {servicios.map(sv => (
-                <div key={sv.id} style={{ ...S.card, opacity:sv.activo ? 1 : 0.5 }}>
-                  <div style={{ flex:1, minWidth:"120px" }}>
-                    <div style={{ color:C.text, fontWeight:600, fontSize:"0.92rem" }}>{sv.nombre}</div>
-                    <div style={{ color:C.text2, fontSize:"0.76rem", marginTop:"2px" }}>{sv.duracion_minutos} min</div>
-                  </div>
-                  <div style={{ display:"flex", alignItems:"center", gap:"0.5rem" }}>
-                    <input type="number" value={editPreco[sv.id] ?? sv.precio}
-                      onChange={e => setEditPreco(p => ({ ...p, [sv.id]: e.target.value }))}
-                      style={{ ...S.inp, width:"85px", padding:"0.45rem 0.6rem", fontSize:"0.85rem", textAlign:"right" }} />
-                    <span style={{ color:C.text2, fontSize:"0.82rem", fontWeight:600 }}>€</span>
-                    <button onClick={() => guardarPreco(sv.id)} style={{ ...S.mini, background:C.roseLight, color:C.roseDeep, border:`1px solid ${C.roseMid}` }}>✓</button>
-                  </div>
-                  <button onClick={() => toggleServico(sv.id, sv.activo)}
-                    style={{ ...S.mini, padding:"6px 14px", fontSize:"0.78rem", fontWeight:700, background:sv.activo ? C.greenBg : C.redBg, color:sv.activo ? C.green : C.red, border:`1px solid ${sv.activo ? C.greenBd : C.redBd}` }}>
-                    {sv.activo ? "Ativo" : "Inativo"}
+                <div style={{ padding: "1.4rem 1.5rem 1.6rem" }}>
+                  <h3 style={{ fontFamily: FONT_TITLE, fontSize: "1.05rem", fontWeight: 700, color: C.text, marginBottom: "0.6rem" }}>{sv.nombre}</h3>
+                  <p style={{ color: C.text2, fontSize: "0.82rem", lineHeight: 1.7, marginBottom: "1.25rem" }}>{getDescricao(sv.nombre)}</p>
+                  <button onClick={() => abrirModal(sv.id)} style={{ ...S.btnRose, width: "100%", padding: "0.72rem", fontSize: "0.85rem" }}>
+                    Reservar Experiência
                   </button>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         )}
-      </div>
+      </section>
 
-      {/* ── MODAL WALK-IN ── */}
-      {modalWalkin && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(51,51,51,0.5)", backdropFilter:"blur(4px)", WebkitBackdropFilter:"blur(4px)", zIndex:200, display:"flex", alignItems:"center", justifyContent:"center", padding:"1rem" }}
-          onClick={e => { if (e.target === e.currentTarget) { setModalWalkin(false); setWalkinHora(""); } }}>
-          <div style={{ background:C.white, border:`1px solid ${C.roseMid}`, borderRadius:"22px", padding:"2.25rem", width:"100%", maxWidth:"420px", position:"relative", boxShadow:"0 24px 70px rgba(51,51,51,0.18)", maxHeight:"92vh", overflowY:"auto" }}>
-            <button onClick={() => { setModalWalkin(false); setWalkinHora(""); }} style={{ position:"absolute", top:"1.25rem", right:"1.25rem", background:C.roseLight, border:"none", color:C.roseDark, cursor:"pointer", borderRadius:"50%", width:"30px", height:"30px", fontSize:"0.9rem", fontWeight:700, display:"flex", alignItems:"center", justifyContent:"center" }}>✕</button>
-            <h3 style={{ fontFamily:FONT_TITLE, color:C.text, margin:"0 0 1.4rem", fontWeight:700, fontSize:"1.2rem" }}>
-              Nova Marcação {walkinHora ? `· ${walkinHora}` : "(Walk-in)"}
-            </h3>
+      {/* ── FAQ ── */}
+      <section id="faq" style={{ background: C.white, padding: "5rem 1.5rem" }}>
+        <div style={{ maxWidth: "700px", margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: "3rem" }}>
+            <p style={{ color: C.rose, fontSize: "0.72rem", letterSpacing: "0.25em", textTransform: "uppercase", fontWeight: 600, marginBottom: "0.6rem" }}>Dúvidas Frequentes</p>
+            <h2 style={{ fontFamily: FONT_TITLE, fontSize: "clamp(1.5rem,3.5vw,2.4rem)", fontWeight: 700, color: C.text }}>Perguntas & Respostas</h2>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+            {FAQ.map((f, i) => (
+              <div key={i} style={{ background: C.bg, border: `1px solid ${C.roseMid}`, borderRadius: "14px", overflow: "hidden" }}>
+                <button onClick={() => setFaqOpen(faqOpen === i ? null : i)}
+                  style={{ width: "100%", background: "none", border: "none", padding: "1.1rem 1.4rem", display: "flex", justifyContent: "space-between", alignItems: "center", cursor: "pointer", fontFamily: FONT_BODY, fontSize: "0.92rem", fontWeight: 600, color: C.text, textAlign: "left" as const, gap: "0.5rem" }}>
+                  <span>{f.q}</span>
+                  <span style={{ color: C.rose, fontSize: "1.3rem", transform: faqOpen === i ? "rotate(45deg)" : "rotate(0)", transition: "transform .3s", flexShrink: 0 }}>+</span>
+                </button>
+                {faqOpen === i && <div style={{ padding: "0 1.4rem 1.2rem", color: C.text2, fontSize: "0.87rem", lineHeight: 1.72 }}>{f.a}</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
-            <label style={S.lbl}>Nome</label>
-            <input style={S.inp} placeholder="Nome do cliente" value={wNome} onChange={e => setWNome(e.target.value)} />
-
-            <label style={S.lbl}>Telefone</label>
-            <input style={S.inp} placeholder="+351 …" value={wTelefone} onChange={e => setWTelefone(e.target.value)} />
-
-            <label style={S.lbl}>Serviço</label>
-            <select style={S.inp} value={wServicoId} onChange={e => setWServicoId(e.target.value)}>
-              <option value="">Escolha…</option>
-              {servicios.filter(sv => sv.activo).map(sv => (
-                <option key={sv.id} value={sv.id}>{sv.nombre} — {sv.precio} €</option>
-              ))}
-            </select>
-
-            {/* Precio editable — aparece cuando hay servicio seleccionado */}
-            {wServicoId && (
-              <>
-                <label style={S.lbl}>Preço a cobrar (€)</label>
-                <div style={{ position:"relative" }}>
-                  <input
-                    type="number"
-                    style={{ ...S.inp, paddingRight:"2.5rem" }}
-                    value={wPreco}
-                    onChange={e => setWPreco(e.target.value)}
-                    placeholder="Preço…"
-                  />
-                  {(() => {
-                    const sv     = servicios.find(s => s.id === wServicoId);
-                    const base   = sv?.precio ?? 0;
-                    const atual  = parseFloat(wPreco);
-                    if (isNaN(atual) || atual === base) return null;
-                    return (
-                      <div style={{ marginTop:"4px", background:C.amberBg, border:`1px solid ${C.amber}33`, borderRadius:"8px", padding:"5px 10px", fontSize:"0.75rem", color:C.amber, fontWeight:600, display:"flex", alignItems:"center", gap:"5px" }}>
-                        ★ Desconto aplicado — preço base: {base} €
-                      </div>
-                    );
-                  })()}
+      {/* ── CONTACTO ── */}
+      <section id="contacto" style={{ background: C.bg, padding: "5rem 1.5rem" }}>
+        <div style={{ maxWidth: "960px", margin: "0 auto" }}>
+          <div style={{ textAlign: "center", marginBottom: "3rem" }}>
+            <p style={{ color: C.rose, fontSize: "0.72rem", letterSpacing: "0.25em", textTransform: "uppercase", fontWeight: 600, marginBottom: "0.6rem" }}>Visite-nos</p>
+            <h2 style={{ fontFamily: FONT_TITLE, fontSize: "clamp(1.5rem,3.5vw,2.4rem)", fontWeight: 700, color: C.text }}>Contacto & Localização</h2>
+          </div>
+          <div className="contact-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "2rem" }}>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {CONTACTO_ROWS.map(([icon, label, value, href]) => (
+                <div key={label} style={{ background: C.white, border: `1px solid ${C.roseMid}`, borderRadius: "14px", padding: "1rem 1.25rem", display: "flex", gap: "1rem", alignItems: "flex-start", boxShadow: "0 2px 12px rgba(236,168,169,0.07)" }}>
+                  <span style={{ fontSize: "1.2rem", marginTop: "1px" }}>{icon}</span>
+                  <div>
+                    <div style={{ color: C.text3, fontSize: "0.67rem", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: "4px", fontWeight: 600 }}>{label}</div>
+                    {href
+                      ? <a href={href} target="_blank" rel="noreferrer" style={{ color: C.roseDeep, fontSize: "0.9rem", textDecoration: "none", fontWeight: 500 }}>{value}</a>
+                      : <div style={{ color: C.text, fontSize: "0.9rem", whiteSpace: "pre-line" }}>{value}</div>
+                    }
+                  </div>
                 </div>
+              ))}
+            </div>
+            <div style={{ borderRadius: "20px", overflow: "hidden", border: `1px solid ${C.roseMid}`, boxShadow: "0 4px 24px rgba(236,168,169,0.14)", minHeight: "320px" }}>
+              <iframe
+                title="Localização Glow"
+                src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3113.0!2d-9.1435!3d38.7195!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x0%3A0x0!2zMzjCsDQzJzEwLjIiTiA5wrAwOCczNi42Ilc!5e0!3m2!1spt!2spt!4v1"
+                width="100%" height="100%"
+                style={{ border: 0, display: "block", minHeight: "320px" }}
+                allowFullScreen loading="lazy"
+              />
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FOOTER ── */}
+      <footer style={{ background: `linear-gradient(135deg,#fce4e4 0%,${C.roseLight} 100%)`, borderTop: `1px solid ${C.roseMid}`, padding: "2.5rem 1.5rem", textAlign: "center" }}>
+        <span style={{ fontFamily: FONT_TITLE, color: C.rose, fontWeight: 800, fontSize: "1.5rem", letterSpacing: "0.06em" }}>Glow Esthetic</span>
+        <p style={{ color: C.text2, fontSize: "0.78rem", marginTop: "0.5rem" }}>Rua Rodrigues Sampaio 146 1º esquerdo, Lisboa · +351 927 459 295</p>
+        <p style={{ color: C.text3, fontSize: "0.74rem", marginTop: "0.25rem" }}>Segunda a Sexta · 11:00h às 19:00h</p>
+        <div className="footer-links" style={{ display: "flex", gap: "1.5rem", justifyContent: "center", marginTop: "1rem", flexWrap: "wrap" }}>
+          <a href={INSTAGRAM_URL} target="_blank" rel="noreferrer" style={{ color: C.roseDeep, fontSize: "0.8rem", textDecoration: "none", fontWeight: 500 }}>Instagram</a>
+          <a href={`https://wa.me/${WA_NUM}`} target="_blank" rel="noreferrer" style={{ color: C.green, fontSize: "0.8rem", textDecoration: "none", fontWeight: 500 }}>WhatsApp</a>
+        </div>
+        <p style={{ color: C.text3, fontSize: "0.7rem", marginTop: "1rem" }}>© {new Date().getFullYear()} Glow Esthetic. Todos os direitos reservados.</p>
+        <a href="/admin" style={{ display: "inline-flex", alignItems: "center", gap: "5px", marginTop: "1.25rem", color: C.text2, fontSize: "0.78rem", textDecoration: "none", fontWeight: 500, background: "rgba(255,255,255,0.6)", border: `1px solid ${C.roseMid}`, borderRadius: "20px", padding: "5px 14px", letterSpacing: "0.03em" }}>
+          🔒 Acesso Equipa
+        </a>
+      </footer>
+
+      {/* ── WHATSAPP FLOTANTE ── */}
+      <a href={`https://wa.me/${WA_NUM}?text=Olá!%20Gostaria%20de%20marcar%20uma%20consulta.`}
+        target="_blank" rel="noreferrer" className="wa-btn"
+        style={{ position: "fixed", bottom: "1.75rem", right: "1.75rem", zIndex: 300, background: C.wa, borderRadius: "50%", width: "58px", height: "58px", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: `0 6px 24px rgba(37,211,102,0.45)`, textDecoration: "none", transition: "transform .2s" }}>
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="white">
+          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+        </svg>
+      </a>
+
+      {/* ── MODAL RESERVA ── */}
+      {modal && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(51,51,51,0.55)", backdropFilter: "blur(5px)", WebkitBackdropFilter: "blur(5px)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "1rem" }}
+          onClick={e => { if (e.target === e.currentTarget) fecharModal(); }}>
+          <div style={{ background: C.white, borderRadius: "24px", padding: "2.25rem", width: "100%", maxWidth: "500px", maxHeight: "94vh", overflowY: "auto", position: "relative", boxShadow: "0 24px 70px rgba(51,51,51,0.2)" }}>
+            <button onClick={fecharModal} style={{ position: "absolute", top: "1.25rem", right: "1.25rem", background: C.roseLight, border: "none", color: C.roseDark, fontSize: "1rem", cursor: "pointer", borderRadius: "50%", width: "32px", height: "32px", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700 }}>✕</button>
+
+            {success ? (
+              <div style={{ textAlign: "center", padding: "2rem 0" }}>
+                <div style={{ width: "64px", height: "64px", background: C.roseLight, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 1.25rem", fontSize: "1.6rem", color: C.rose }}>✦</div>
+                <h2 style={{ fontFamily: FONT_TITLE, color: C.text, margin: "0 0 0.6rem", fontWeight: 700, fontSize: "1.5rem" }}>Marcação Enviada!</h2>
+                <p style={{ color: C.text2, fontSize: "0.9rem", lineHeight: 1.65, maxWidth: "320px", margin: "0 auto 1.75rem" }}>
+                  A nossa equipa confirmará a disponibilidade e detalhes em breve.
+                </p>
+                <button style={{ ...S.btnRose, padding: "0.8rem 2rem" }} onClick={fecharModal}>Fechar</button>
+              </div>
+            ) : (
+              <>
+                <h2 style={{ fontFamily: FONT_TITLE, color: C.text, fontWeight: 700, fontSize: "1.4rem", margin: "0 0 0.4rem" }}>Reservar Experiência</h2>
+                <p style={{ color: C.text2, fontSize: "0.82rem", marginBottom: "1.5rem", lineHeight: 1.6 }}>
+                  A nossa equipa confirmará a disponibilidade e os detalhes.
+                </p>
+
+                <label style={S.lbl}>Nome</label>
+                <input style={S.inp} placeholder="O seu nome completo" value={form.nome} onChange={e => campo("nome", e.target.value)} />
+
+                <label style={S.lbl}>Telefone</label>
+                <input style={S.inp} placeholder="+351 900 000 000" value={form.telefone} onChange={e => campo("telefone", e.target.value)} />
+
+                <label style={S.lbl}>Tratamento</label>
+                <select style={S.inp} value={form.servico_id} onChange={e => campo("servico_id", e.target.value)}>
+                  <option value="">Escolha um tratamento…</option>
+                  {servicios.map(sv => (
+                    <option key={sv.id} value={sv.id}>{sv.nombre} ({sv.duracion_minutos} min)</option>
+                  ))}
+                </select>
+
+                {servicoSel && (
+                  <div style={{ background: C.roseLight, border: `1px solid ${C.roseMid}`, borderRadius: "10px", padding: "0.65rem 1rem", marginTop: "0.5rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ color: C.rose }}>✦</span>
+                    <span style={{ color: C.roseDeep, fontSize: "0.85rem", fontWeight: 600 }}>{servicoSel.nombre}</span>
+                    <span style={{ color: C.text2, fontSize: "0.78rem", marginLeft: "auto" }}>{servicoSel.duracion_minutos} min</span>
+                  </div>
+                )}
+
+                <label style={S.lbl}>Data</label>
+                <input type="date" style={S.inp} value={form.data} min={hojeISO()} onChange={e => campo("data", e.target.value)} />
+
+                <label style={S.lbl}>Hora disponível</label>
+                <div className="hora-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.45rem", margin: "0.4rem 0 1rem" }}>
+                  {TODAS_HORAS.map(h => {
+                    const bloq = todasBloq.has(h);
+                    const sel  = form.hora === h;
+                    return (
+                      <button key={h} disabled={bloq} onClick={() => !bloq && campo("hora", h)}
+                        style={{ padding: "0.5rem", borderRadius: "10px", fontSize: "0.75rem", fontWeight: 600, cursor: bloq ? "not-allowed" : "pointer", background: sel ? C.rose : bloq ? "#f5f5f5" : C.white, color: sel ? C.white : bloq ? "#ccc" : C.text2, border: sel ? `1.5px solid ${C.rose}` : `1px solid ${C.roseMid}`, textDecoration: bloq ? "line-through" : "none", transition: "all .15s", fontFamily: FONT_BODY }}>
+                        {h}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {erro && <p style={{ color: "#e05555", fontSize: "0.82rem", marginBottom: "0.75rem" }}>{erro}</p>}
+
+                <button
+                  style={{ ...S.btnRose, width: "100%", padding: "0.95rem", fontSize: "0.95rem", opacity: loading ? 0.65 : 1, boxShadow: `0 6px 20px rgba(236,168,169,0.4)` }}
+                  onClick={reservar}
+                  disabled={loading}>
+                  {loading ? "A enviar…" : "✦ Confirmar Marcação"}
+                </button>
               </>
             )}
-
-            <label style={S.lbl}>Hora</label>
-            <input type="time" style={S.inp} value={wHora} onChange={e => setWHora(e.target.value)} />
-
-            <button style={{ ...S.btnRose, width:"100%", padding:"0.85rem", marginTop:"1.1rem", fontSize:"0.95rem", boxShadow:`0 6px 20px rgba(236,168,169,0.35)` }} onClick={guardarWalkin}>
-              Guardar Marcação
-            </button>
           </div>
         </div>
       )}
