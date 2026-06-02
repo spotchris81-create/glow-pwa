@@ -82,99 +82,92 @@ function horasBloqueadasPorDuracao(ocupadas: string[], duracao: number): string[
 
 // ─── IMAGENS POR PALAVRA-CHAVE ────────────────────────────
 const KW_IMGS: { keys: string[]; url: string }[] = [
-  // Serviços existentes
-  { keys: ["skin","booster","hidratação","hidratacao"],                 url: "/images/skin-boosters.jpg"          },
-  { keys: ["capilar","cabelo","dermapen"],                              url: "/images/capilar.jpg"                },
-  { keys: ["limpeza","pele"],                                           url: "/images/limpeza.jpg"                },
-  { keys: ["glow","lips","lábios","labios"],                            url: "/images/glow-lips.jpg"              },
-  { keys: ["acne","borbulhas"],                                         url: "/images/acne.jpg"                   },
-  { keys: ["led","terapia","rejuvenescimento"],                         url: "/images/led.jpg"                    },
-  { keys: ["depilação","depilacao","laser"],                            url: "/images/laser.jpg"                  },
-  { keys: ["relaxante"],                                                url: "/images/relaxante.jpg"              },
-  { keys: ["drenagem","linfática","linfatica"],                         url: "/images/relaxante.jpg"              },
-  { keys: ["modeladora","redutora"],                                    url: "/images/modeladora.jpg"             },
-  { keys: ["remoção tatuagem","remocao tatuagem","tattoo","tatuagem"],  url: "/images/remocao-tatuagem.jpg"       },
-  { keys: ["remoção sobrancelha","remocao sobrancelha","sobrancelha"],  url: "/images/remocao-sobrancelha.jpg"    },
-  // Novos serviços
-  { keys: ["presso","pressoterapia"],                                   url: "/images/pressoterapia.jpg"          },
-  { keys: ["radiofrequência","radiofrequencia","rf"],                   url: "/images/radiofrequencia.jpg"        },
-  { keys: ["grávida","gravida","gestante","pré-parto","pre-parto"],     url: "/images/massagem-gravidas.jpg"      },
-  { keys: ["desportiva","desporto","atleta"],                           url: "/images/massagem-desportiva.jpg"    },
-  { keys: ["pós-operatória","pos-operatoria","cirurgia"],               url: "/images/massagem-pos-operatoria.jpg"},
+  { keys: ["skin","booster"],                                    url: "/images/skin-boosters.jpg"           },
+  { keys: ["capilar","cabelo","dermapen"],                       url: "/images/capilar.jpg"                 },
+  { keys: ["limpeza","pele"],                                    url: "/images/limpeza.jpg"                 },
+  { keys: ["glow","lips","lábios","labios"],                     url: "/images/glow-lips.jpg"               },
+  { keys: ["acne","borbulhas"],                                  url: "/images/acne.jpg"                    },
+  { keys: ["led","terapia"],                                     url: "/images/led.jpg"                     },
+  { keys: ["depilação","depilacao","laser"],                     url: "/images/laser.jpg"                   },
+  { keys: ["relaxante"],                                         url: "/images/relaxante.jpg"               },
+  { keys: ["drenagem","linfática","linfatica"],                  url: "/images/relaxante.jpg"               },
+  { keys: ["modeladora","redutora"],                             url: "/images/modeladora.jpg"              },
+  { keys: ["tatuagem","tattoo"],                                 url: "/images/remocao-tatuagem.jpg"        },
+  { keys: ["sobrancelh"],                                        url: "/images/remocao-sobrancelha.jpg"     },
+  { keys: ["presso","pressoterapia"],                            url: "/images/pressoterapia.jpg"           },
+  { keys: ["radiofrequênci","radiofrequenci"," rf"],             url: "/images/radiofrequencia.jpg"         },
+  { keys: ["grávid","gravid","gestante"],                        url: "/images/massagem-gravidas.jpg"       },
+  { keys: ["desportiv","desporto","atleta"],                     url: "/images/massagem-desportiva.jpg"     },
+  { keys: ["operatór","operatori","cirurgia"],                   url: "/images/massagem-pos-operatoria.jpg" },
+  { keys: ["hydro","hidro","hidrofacial"],                       url: "https://images.unsplash.com/photo-1570172619644-dfd03ed5d881?w=600&q=80" },
 ];
 const IMG_DEFAULT = "/images/skin-boosters.jpg";
 
 function getImagem(nome: string): string {
   const n = nome.toLowerCase();
-  // Combinações compostas — testar primeiro
-  if (n.includes("remoção") || n.includes("remocao")) {
-    if (n.includes("sobrancelha")) return "/images/remocao-sobrancelha.jpg";
-    if (n.includes("tatuagem") || n.includes("tattoo")) return "/images/remocao-tatuagem.jpg";
-  }
   for (const { keys, url } of KW_IMGS) {
     if (keys.some(k => n.includes(k))) return url;
   }
   return IMG_DEFAULT;
 }
 
-// ─── DESCRIÇÕES EXATAS ────────────────────────────────────
+// ─── DESCRIÇÕES PREMIUM ───────────────────────────────────
 function getDescricao(nome: string): string {
   const n = nome.toLowerCase();
 
-  // ── Serviços existentes ──
-  if (["skin","booster","hidratação","hidratacao"].some(k => n.includes(k)))
-    return "A hidratação profunda da pele é essencial para preservar a sua luminosidade, elasticidade e aparência saudável. Os tratamentos com Skin Boosters atuam nas camadas profundas da pele, melhorando a hidratação e a firmeza. Este tratamento é especialmente indicado para: Linhas finas e rugas superficiais; Pele desidratada ou opaca; Perda de elasticidade. Com resultados progressivos e naturais, os Skin Boosters devolvem à pele um aspeto mais fresco e revitalizado.";
+  if (n.includes("skin") || n.includes("booster"))
+    return "A hidratação profunda da pele é essencial para preservar a sua luminosidade, elasticidade e aparência saudável. Os tratamentos com Skin Boosters atuam nas camadas profundas da pele, melhorando a hidratação e a firmeza. Com resultados progressivos e naturais, devolvem à pele um aspeto mais fresco e revitalizado.";
 
-  if (["capilar","cabelo","dermapen"].some(k => n.includes(k)))
-    return "Recupere a vitalidade, densidade e qualidade do seu cabelo com tratamentos capilares avançados. Utilizamos técnicas como PRP, Microagulhamento, Exossomas e Polinucleótidos para estimular o crescimento, fortalecer a raiz e melhorar a oxigenação celular do couro cabeludo. Indicado para afinamento capilar, queda em fase inicial e perda de densidade.";
+  if (n.includes("capilar") || n.includes("cabelo") || n.includes("dermapen"))
+    return "Recupere a vitalidade, densidade e qualidade do seu cabelo com tratamentos capilares avançados. Utilizamos técnicas como PRP, Microagulhamento, Exossomas e Polinucleótidos para estimular o crescimento, fortalecer a raiz e melhorar a oxigenação celular do couro cabeludo.";
 
-  if (["limpeza","pele"].some(k => n.includes(k)))
-    return "A limpeza de pele é um tratamento essencial para manter a pele saudável, equilibrada e luminosa. Remove impurezas, células mortas e pontos negros. O tratamento inclui higienização profunda, esfoliação suave, extração cuidadosa e hidratação. Promove uma pele mais limpa, previne imperfeições e melhora a textura natural.";
+  if (n.includes("limpeza") || n.includes("pele"))
+    return "A limpeza de pele é um tratamento essencial para manter a pele saudável, equilibrada e luminosa. Remove impurezas, células mortas e pontos negros. O tratamento inclui higienização profunda, esfoliação suave, extração cuidadosa e hidratação.";
 
-  if (["glow","lips","lábios","labios"].some(k => n.includes(k)))
-    return "Lábios hidratados, luminosos e naturalmente irresistíveis. O tratamento Glow Lips realça a beleza natural dos teus lábios, proporcionando hidratação profunda, brilho saudável e um efeito suave e volumoso. Com ingredientes nutritivos e acabamento glow, os teus lábios ficam revitalizados e macios.";
+  if (n.includes("glow") || n.includes("lips") || n.includes("lábios") || n.includes("labios"))
+    return "Lábios hidratados, luminosos e naturalmente irresistíveis. O tratamento Glow Lips realça a beleza natural dos teus lábios, proporcionando hidratação profunda, brilho saudável e um efeito suave e volumoso.";
 
-  if (["acne","borbulhas"].some(k => n.includes(k)))
-    return "Cuida da tua pele com um tratamento especializado para reduzir a acne, controlar a oleosidade e melhorar a textura da pele. Ajuda a combater borbulhas, marcas e inflamações. Reduz a vermelhidão, previne novas imperfeições e promove uma pele mais uniforme e luminosa.";
+  if (n.includes("acne") || n.includes("borbulhas"))
+    return "Cuida da tua pele com um tratamento especializado para reduzir a acne, controlar a oleosidade e melhorar a textura da pele. Ajuda a combater borbulhas, marcas e inflamações, promovendo uma pele mais uniforme e luminosa.";
 
-  if (["led","terapia","rejuvenescimento"].some(k => n.includes(k)))
-    return "Revitaliza a tua pele com a tecnologia LED Terapia, um tratamento não invasivo que estimula a regeneração celular. A luz LED atua em profundidade para estimular a produção de colagénio, reduzir linhas finas e melhorar a firmeza e elasticidade, proporcionando um aspeto mais jovem e saudável sem dor.";
+  if (n.includes("led") || n.includes("terapia"))
+    return "Revitaliza a tua pele com a tecnologia LED Terapia, um tratamento não invasivo que estimula a regeneração celular. A luz LED atua em profundidade para estimular a produção de colagénio, reduzir linhas finas e melhorar a firmeza.";
 
-  if (["depilação","depilacao","laser"].some(k => n.includes(k)))
+  if (n.includes("depilação") || n.includes("depilacao") || n.includes("laser"))
     return "A depilação a laser é um método de depilação progressiva definitiva que utiliza a luz para destruir o pelo direto na raiz. Fim da foliculite, clareamento da pele e resultados duradouros.";
 
   if (n.includes("relaxante"))
     return "Renove as suas energias e cuide do seu bem-estar com a nossa Massagem Relaxante. Um momento perfeito para aliviar o stress, relaxar o corpo e equilibrar a mente.";
 
-  if (["drenagem","linfática","linfatica"].some(k => n.includes(k)))
+  if (n.includes("drenagem") || n.includes("linfática") || n.includes("linfatica"))
     return "Cuide do seu corpo e sinta-se mais leve. Ajuda a eliminar toxinas, reduzir o inchaço e a retenção de líquidos, contribuindo para a redução da celulite e promovendo bem-estar.";
 
-  if (["modeladora","redutora"].some(k => n.includes(k)))
+  if (n.includes("modeladora") || n.includes("redutora"))
     return "Combina manobras vigorosas e técnicas de drenagem que ativam a circulação, eliminam toxinas e modelam as tuas curvas de forma imediata. Reduz o volume abdominal e combate a celulite.";
 
-  // Remoções compostas — verificar antes das genéricas
-  if (n.includes("remoção") || n.includes("remocao")) {
-    if (n.includes("sobrancelha"))
-      return "Remoção segura e eficaz de pigmentos antigos na zona das sobrancelhas utilizando tecnologia avançada.";
-    if (n.includes("tatuagem") || n.includes("tattoo"))
-      return "Procedimento estético que utiliza tecnologia a laser para fragmentar e eliminar os pigmentos de tinta introduzidos na camada da derme da pele de forma segura.";
-  }
+  if (n.includes("tatuagem") || n.includes("tattoo"))
+    return "Procedimento estético e biomédico que utiliza tecnologia a laser para fragmentar e eliminar os pigmentos de tinta introduzidos na camada da derme da pele de forma segura.";
 
-  // ── Novos serviços ──
-  if (["presso","pressoterapia"].some(k => n.includes(k)))
-    return "A Pressoterapia é um tratamento estético e terapêutico que utiliza pressão de ar controlada através de botas, cintas ou mangas especiais para estimular a circulação sanguínea e linfática. Ajuda o corpo a eliminar toxinas, reduzir o inchaço e melhorar a sensação de pernas cansadas, proporcionando bem-estar e leveza.";
+  if (n.includes("sobrancelh"))
+    return "Remoção segura e eficaz de pigmentos antigos na zona das sobrancelhas utilizando tecnologia avançada.";
 
-  if (["radiofrequência","radiofrequencia"," rf"].some(k => n.includes(k)))
-    return "Tratamento estético não invasivo que utiliza ondas de radiofrequência para aquecer as camadas profundas da pele, estimulando a produção de colagénio e elastina. Ajuda a melhorar a firmeza da pele, reduzir a flacidez e proporcionar um aspeto mais jovem e tonificado.";
+  if (n.includes("presso") || n.includes("pressoterapia"))
+    return "A Pressoterapia é um tratamento estético e terapêutico que utiliza pressão de ar controlada através de botas para estimular a circulação. Ajuda a eliminar toxinas, reduzir o inchaço e a sensação de pernas cansadas.";
 
-  if (["grávida","gravida","gestante","pré-parto","pre-parto"].some(k => n.includes(k)))
-    return "Tratamento suave e relaxante especialmente desenvolvido para proporcionar conforto e bem-estar durante a gravidez. Com técnicas adaptadas, ajuda a aliviar as tensões físicas e emocionais desta fase tão especial.";
+  if (n.includes("radiofrequênci") || n.includes("radiofrequenci") || n.includes(" rf"))
+    return "Tratamento estético não invasivo que utiliza ondas de radiofrequência para aquecer as camadas profundas da pele, estimulando a produção de colagénio e elastina. Reduz a flacidez e tonifica.";
 
-  if (["desportiva","desporto","atleta"].some(k => n.includes(k)))
-    return "Técnica especializada indicada para atletas e pessoas fisicamente ativas, ajudando na recuperação muscular, prevenção de lesões e melhoria do desempenho físico. Atua diretamente nos músculos mais exigidos pelo esforço físico, proporcionando alívio e recuperação.";
+  if (n.includes("grávid") || n.includes("gravid") || n.includes("gestante"))
+    return "A Massagem para Grávidas é um tratamento suave e relaxante desenvolvido para proporcionar conforto. Com técnicas adaptadas, ajuda a aliviar as tensões físicas e emocionais desta fase tão especial.";
 
-  if (["pós-operatória","pos-operatoria","cirurgia"].some(k => n.includes(k)))
-    return "Tratamento especializado indicado para auxiliar na recuperação após cirurgias estéticas ou procedimentos cirúrgicos. Realizada com técnicas suaves e cuidadosas, ajuda a reduzir o inchaço, melhorar a circulação e acelerar o processo de recuperação.";
+  if (n.includes("desportiv") || n.includes("desporto") || n.includes("atleta"))
+    return "Técnica especializada indicada para atletas e pessoas fisicamente ativas. Com movimentos intensos, atua nos músculos exigidos pelo esforço físico, ajudando na recuperação, prevenção de lesões e alívio.";
+
+  if (n.includes("operatór") || n.includes("operatori") || n.includes("cirurgia"))
+    return "A Massagem Pós-Operatória é indicada para auxiliar na recuperação após cirurgias estéticas. Realizada com técnicas suaves e cuidadosas, ajuda a reduzir o inchaço, melhorar a circulação e acelerar o processo.";
+
+  if (n.includes("hydro") || n.includes("hidro") || n.includes("hidrofacial"))
+    return "Desperte a luminosidade adormecida com este tratamento de vanguarda. Hidratação profunda, remoção de impurezas e renovação celular numa só experiência transformadora.";
 
   return "Uma experiência de bem-estar criada exclusivamente para si — porque a sua beleza merece um cuidado verdadeiramente especial.";
 }
@@ -259,11 +252,11 @@ export default function ClientePage() {
     window.addEventListener("resize", resize);
     for (let i = 0; i < 55; i++) {
       particles.push({
-        x: Math.random() * (canvas.width  || 800),
-        y: Math.random() * (canvas.height || 600),
-        r: Math.random() * 2.5 + 0.5,
-        dx: (Math.random() - 0.5) * 0.3,
-        dy: -Math.random() * 0.4 - 0.1,
+        x:     Math.random() * (canvas.width  || 800),
+        y:     Math.random() * (canvas.height || 600),
+        r:     Math.random() * 2.5 + 0.5,
+        dx:    (Math.random() - 0.5) * 0.3,
+        dy:    -Math.random() * 0.4 - 0.1,
         alpha: Math.random() * 0.5 + 0.1,
       });
     }
@@ -344,26 +337,28 @@ export default function ClientePage() {
   const serviciosFiltrados = servicios.filter(sv => (sv.categoria ?? "").trim() === tabCat);
 
   const CONTACTO_ROWS: [string, string, string, string | null][] = [
-    ["📍", "Morada",   "Rua Rodrigues Sampaio 146 1º esquerdo\n1150-282 Lisboa", null],
-    ["📞", "Telefone", "+351 927 459 295",                                        "tel:+351927459295"],
-    ["✉️", "Email",    "glowestheticportugal@gmail.com",                          "mailto:glowestheticportugal@gmail.com"],
-    ["📸", "Instagram", `@${INSTAGRAM}`,                                          INSTAGRAM_URL],
-    ["🕒", "Horário",  "Segunda a Sexta\n11:00h às 19:00h",                       null],
+    ["📍", "Morada",    "Rua Rodrigues Sampaio 146 1º esquerdo\n1150-282 Lisboa", null],
+    ["📞", "Telefone",  "+351 927 459 295",                                        "tel:+351927459295"],
+    ["✉️", "Email",     "glowestheticportugal@gmail.com",                          "mailto:glowestheticportugal@gmail.com"],
+    ["📸", "Instagram", `@${INSTAGRAM}`,                                           INSTAGRAM_URL],
+    ["🕒", "Horário",   "Segunda a Sexta\n11:00h às 19:00h",                       null],
   ];
 
   return (
     <div style={{ background: C.bg, minHeight: "100vh", color: C.text, fontFamily: FONT_BODY }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400;1,600&family=Inter:wght@300;400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;0,800;1,400;1,600&family=Inter:wght@300;400;500;600;700&display=swap');
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         html { scroll-behavior: smooth; } body { overflow-x: hidden; }
         input[type="date"]::-webkit-calendar-picker-indicator,
         input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(0.4); cursor: pointer; }
-        ::-webkit-scrollbar { width: 5px; } ::-webkit-scrollbar-thumb { background: ${C.rose}; border-radius: 3px; }
+        ::-webkit-scrollbar { width: 5px; }
+        ::-webkit-scrollbar-thumb { background: ${C.rose}; border-radius: 3px; }
         .svc-card { transition: transform .25s ease, box-shadow .25s ease !important; }
         .svc-card:hover { transform: translateY(-6px) !important; box-shadow: 0 16px 40px rgba(236,168,169,0.28) !important; }
         .tab-pill:hover { background: ${C.roseMid} !important; }
         .wa-btn:hover { transform: scale(1.1) !important; }
+        @keyframes shimmer { 0%,100%{opacity:1} 50%{opacity:0.7} }
         @media (max-width: 640px) {
           .nav-links { display: none !important; }
           .nav-menu-btn { display: flex !important; }
@@ -382,10 +377,11 @@ export default function ClientePage() {
 
       {/* ── NAV ── */}
       <nav style={{ background: "rgba(255,245,247,0.95)", backdropFilter: "blur(14px)", WebkitBackdropFilter: "blur(14px)", borderBottom: `1px solid ${C.roseMid}`, position: "sticky", top: 0, zIndex: 100, boxShadow: `0 2px 20px rgba(236,168,169,0.12)` }}>
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 1.5rem", height: "64px", maxWidth: "1200px", margin: "0 auto" }}>
-          <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
-            <span style={{ color: C.rose, fontWeight: 700, fontSize: "1.4rem", fontFamily: FONT_TITLE, letterSpacing: "0.05em" }}>Glow</span>
-            <span style={{ color: C.text2, fontSize: "0.68rem", letterSpacing: "0.18em", textTransform: "uppercase" }}>Esthetic</span>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 1.5rem", height: "68px", maxWidth: "1200px", margin: "0 auto" }}>
+          {/* MARCA NAV — tamanho aumentado */}
+          <div style={{ display: "flex", alignItems: "baseline", gap: "7px" }}>
+            <span style={{ color: C.rose, fontWeight: 800, fontSize: "1.85rem", fontFamily: FONT_TITLE, letterSpacing: "0.04em", lineHeight: 1 }}>Glow</span>
+            <span style={{ color: C.roseDeep, fontSize: "0.85rem", letterSpacing: "0.22em", textTransform: "uppercase", fontWeight: 500, fontFamily: FONT_BODY }}>Esthetic</span>
           </div>
           <div className="nav-links" style={{ display: "flex", gap: "2rem", alignItems: "center" }}>
             <a href="#servicos" style={{ color: C.text2, fontSize: "0.85rem", textDecoration: "none", fontWeight: 500 }}>Serviços</a>
@@ -412,25 +408,55 @@ export default function ClientePage() {
       </nav>
 
       {/* ── HERO ── */}
-      <section style={{ position: "relative", minHeight: "92vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "4rem 1.5rem 6rem", overflow: "hidden", background: `linear-gradient(155deg,#fff0f1 0%,#fce4e4 40%,#f8d0d0 100%)` }}>
+      <section style={{ position: "relative", minHeight: "96vh", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", textAlign: "center", padding: "4rem 1.5rem 7rem", overflow: "hidden", background: `linear-gradient(155deg,#fff0f1 0%,#fce4e4 40%,#f8d0d0 100%)` }}>
+        {/* Fundo textura subtil */}
         <div style={{ position: "absolute", inset: 0, backgroundImage: `url("https://images.unsplash.com/photo-1540555700478-4be289fbecef?w=1400&q=55")`, backgroundSize: "cover", backgroundPosition: "center", opacity: 0.07 }} />
+        {/* Canvas partículas */}
         <canvas ref={canvasRef} style={{ position: "absolute", inset: 0, width: "100%", height: "100%", pointerEvents: "none" }} />
-        <div style={{ position: "relative", zIndex: 2, maxWidth: "680px", width: "100%", opacity: heroVisible ? 1 : 0, transition: "opacity 0.9s ease, transform 0.9s ease", transform: heroVisible ? "translateY(0)" : "translateY(24px)" }}>
-          <div style={{ display: "inline-block", background: "rgba(255,255,255,0.72)", backdropFilter: "blur(8px)", color: C.roseDeep, fontSize: "0.7rem", letterSpacing: "0.28em", textTransform: "uppercase", padding: "7px 22px", borderRadius: "999px", marginBottom: "1.75rem", border: `1px solid ${C.roseMid}`, fontWeight: 600 }}>
+
+        <div style={{ position: "relative", zIndex: 2, maxWidth: "780px", width: "100%", opacity: heroVisible ? 1 : 0, transition: "opacity 1s ease, transform 1s ease", transform: heroVisible ? "translateY(0)" : "translateY(28px)" }}>
+
+          {/* ── MARCA HERO — protagonismo máximo ── */}
+          <div style={{ marginBottom: "1rem" }}>
+            <h2 style={{
+              fontFamily: FONT_TITLE,
+              fontSize: "clamp(2.8rem, 7vw, 5rem)",
+              fontWeight: 800,
+              color: C.roseDeep,
+              letterSpacing: "0.06em",
+              lineHeight: 1,
+              margin: 0,
+            }}>
+              Glow Esthetic
+            </h2>
+            <div style={{ width: "60px", height: "2px", background: `linear-gradient(90deg, transparent, ${C.rose}, transparent)`, margin: "0.75rem auto 0" }} />
+          </div>
+
+          {/* Pill localização */}
+          <div style={{ display: "inline-block", background: "rgba(255,255,255,0.72)", backdropFilter: "blur(8px)", color: C.roseDeep, fontSize: "0.68rem", letterSpacing: "0.28em", textTransform: "uppercase", padding: "6px 20px", borderRadius: "999px", marginBottom: "1.6rem", border: `1px solid ${C.roseMid}`, fontWeight: 600 }}>
             Centro de Estética · Lisboa
           </div>
-          <h1 style={{ fontFamily: FONT_TITLE, fontSize: "clamp(2.2rem,6.5vw,5rem)", fontWeight: 700, color: C.text, lineHeight: 1.08, letterSpacing: "-0.02em", marginBottom: "1.25rem" }}>
+
+          <h1 style={{ fontFamily: FONT_TITLE, fontSize: "clamp(1.9rem,5vw,3.8rem)", fontWeight: 700, color: C.text, lineHeight: 1.12, letterSpacing: "-0.02em", marginBottom: "1.1rem" }}>
             A arte de <em style={{ color: C.rose, fontStyle: "italic" }}>cuidar</em><br />a sua beleza
           </h1>
-          <p style={{ color: C.text2, fontSize: "clamp(0.95rem,2.5vw,1.1rem)", lineHeight: 1.75, marginBottom: "0.75rem", fontWeight: 300 }}>
+
+          <p style={{ color: C.text2, fontSize: "clamp(0.92rem,2.5vw,1.05rem)", lineHeight: 1.75, marginBottom: "0.65rem", fontWeight: 300 }}>
             Experiências de bem-estar desde <strong style={{ color: C.roseDeep, fontWeight: 600 }}>35€</strong>
           </p>
-          <p style={{ color: C.text3, fontSize: "0.88rem", marginBottom: "2.5rem" }}>Rua Rodrigues Sampaio 146, Lisboa</p>
+          <p style={{ color: C.text3, fontSize: "0.85rem", marginBottom: "2.5rem" }}>Rua Rodrigues Sampaio 146, Lisboa</p>
+
           <div className="hero-btns" style={{ display: "flex", gap: "1rem", justifyContent: "center", flexWrap: "wrap" }}>
-            <button onClick={() => abrirModal()} style={{ ...S.btnRose, padding: "1rem 2.5rem", fontSize: "1rem", boxShadow: `0 8px 28px rgba(236,168,169,0.45)` }}>Reservar Experiência</button>
-            <a href="#servicos" style={{ ...S.btnGhost, padding: "1rem 2.5rem", fontSize: "1rem" }}>Ver Serviços</a>
+            <button onClick={() => abrirModal()} style={{ ...S.btnRose, padding: "1rem 2.5rem", fontSize: "1rem", boxShadow: `0 8px 28px rgba(236,168,169,0.45)` }}>
+              Reservar Experiência
+            </button>
+            <a href="#servicos" style={{ ...S.btnGhost, padding: "1rem 2.5rem", fontSize: "1rem" }}>
+              Ver Serviços
+            </a>
           </div>
         </div>
+
+        {/* Wave SVG */}
         <div style={{ position: "absolute", bottom: 0, left: 0, right: 0, lineHeight: 0 }}>
           <svg viewBox="0 0 1440 80" preserveAspectRatio="none" style={{ width: "100%", height: "70px", display: "block" }}>
             <path d="M0,40 C240,80 480,0 720,40 C960,80 1200,0 1440,40 L1440,80 L0,80 Z" fill={C.bg} />
@@ -478,7 +504,9 @@ export default function ClientePage() {
                 <div style={{ padding: "1.4rem 1.5rem 1.6rem" }}>
                   <h3 style={{ fontFamily: FONT_TITLE, fontSize: "1.05rem", fontWeight: 700, color: C.text, marginBottom: "0.6rem" }}>{sv.nombre}</h3>
                   <p style={{ color: C.text2, fontSize: "0.82rem", lineHeight: 1.7, marginBottom: "1.25rem" }}>{getDescricao(sv.nombre)}</p>
-                  <button onClick={() => abrirModal(sv.id)} style={{ ...S.btnRose, width: "100%", padding: "0.72rem", fontSize: "0.85rem" }}>Reservar Experiência</button>
+                  <button onClick={() => abrirModal(sv.id)} style={{ ...S.btnRose, width: "100%", padding: "0.72rem", fontSize: "0.85rem" }}>
+                    Reservar Experiência
+                  </button>
                 </div>
               </div>
             ))}
@@ -545,7 +573,7 @@ export default function ClientePage() {
 
       {/* ── FOOTER ── */}
       <footer style={{ background: `linear-gradient(135deg,#fce4e4 0%,${C.roseLight} 100%)`, borderTop: `1px solid ${C.roseMid}`, padding: "2.5rem 1.5rem", textAlign: "center" }}>
-        <span style={{ fontFamily: FONT_TITLE, color: C.rose, fontWeight: 700, fontSize: "1.4rem", letterSpacing: "0.05em" }}>Glow Esthetic</span>
+        <span style={{ fontFamily: FONT_TITLE, color: C.rose, fontWeight: 800, fontSize: "1.5rem", letterSpacing: "0.06em" }}>Glow Esthetic</span>
         <p style={{ color: C.text2, fontSize: "0.78rem", marginTop: "0.5rem" }}>Rua Rodrigues Sampaio 146 1º esquerdo, Lisboa · +351 927 459 295</p>
         <p style={{ color: C.text3, fontSize: "0.74rem", marginTop: "0.25rem" }}>Segunda a Sexta · 11:00h às 19:00h</p>
         <div className="footer-links" style={{ display: "flex", gap: "1.5rem", justifyContent: "center", marginTop: "1rem", flexWrap: "wrap" }}>
