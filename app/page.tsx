@@ -87,7 +87,7 @@ const KW_IMGS: { keys: string[]; url: string }[] = [
   { keys: ["limpeza","pele"],                                    url: "/images/limpeza.jpg"                 },
   { keys: ["glow","lips","lábios","labios"],                     url: "/images/glow-lips.jpg"               },
   { keys: ["acne","borbulhas"],                                  url: "/images/acne.jpg"                    },
-  { keys: ["led","terapia"],                                     url: "/images/led.jpg"                     },
+  { keys: ["led",],                                     url: "/images/led.jpg"                     },
   { keys: ["depilação","depilacao","laser"],                     url: "/images/laser.jpg"                   },
   { keys: ["relaxante"],                                         url: "/images/relaxante.jpg"               },
   { keys: ["drenagem","linfática","linfatica"],                  url: "/images/relaxante.jpg"               },
@@ -130,7 +130,7 @@ function getDescricao(nome: string): string {
   if (n.includes("acne") || n.includes("borbulhas"))
     return "Cuida da tua pele com um tratamento especializado para reduzir a acne, controlar a oleosidade e melhorar a textura da pele. Ajuda a combater borbulhas, marcas e inflamações, promovendo uma pele mais uniforme e luminosa.";
 
-  if (n.includes("led") || n.includes("terapia"))
+  if (n.includes("led"))
     return "Revitaliza a tua pele com a tecnologia LED Terapia, um tratamento não invasivo que estimula a regeneração celular. A luz LED atua em profundidade para estimular a produção de colagénio, reduzir linhas finas e melhorar a firmeza.";
 
   if (n.includes("depilação") || n.includes("depilacao") || n.includes("laser"))
